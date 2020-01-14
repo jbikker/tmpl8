@@ -55,14 +55,15 @@ Report problems and suggestions to bikker.j@gmail.com .
 
 *Changelog*
 
-v2017-01: 
-initial DGDARC release.
+v2020-01:
+swapped SDL2 for GLFW.
+turned to github for distribution.
+added DearImgui.
+added Taskflow for threading.
 
-v2017-02:
-added a changelog.
-debug mode now also emits .exe to project folder.
-removed rogue SDL2 folder.
-added assert.h to precomp.h.
+v2019-01:
+upgraded to SDL2.0.10.
+minor upgrade for INFOMOV2019.
 
 v2019-01:
 upgraded to SDL2.0.9.
@@ -72,9 +73,11 @@ added aabb class for ADVGR.
 added matrix operators for ADVGR.
 made cross-platform by Marijn Suijten.
 
-v2019-01:
-upgraded to SDL2.0.10.
-minor upgrade for INFOMOV2019.
+v2017-02:
+added a changelog.
+debug mode now also emits .exe to project folder.
+removed rogue SDL2 folder.
+added assert.h to precomp.h.
 
-v2020-01:
-swapped SDL2 for GLFW.
+v2017-01: 
+initial DGDARC release.
