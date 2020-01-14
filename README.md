@@ -49,11 +49,7 @@ Starting January 2018, the name of the template represents the version.
 This version also appears in the title of the window. Make sure you
 are using the most recent version.
 
-Utrecht, 2015-2020, Utrecht University - Breda, 2014, NHTV/IGAD
-
-Jacco Bikker
-
-Report problems and suggestions to bikker.j@gmail.com .
+Utrecht, 2015-2020, Utrecht University - Breda, 2014, NHTV/IGAD - Jacco Bikker - Report problems and suggestions to bikker.j@gmail.com .
 
 *Changelog*
 
