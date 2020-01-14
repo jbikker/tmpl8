@@ -1,6 +1,6 @@
-#BRIEF INFO ON THE 2020-01 TEMPLATE
+# BRIEF INFO ON THE 2020-01 TEMPLATE
 
-Purpose:
+*Purpose:*
 The template has been designed to make it easy to start coding C++
 using games and graphics. It intends to offer the programmer a
 simple library with the main purpose of providing a 32-bit graphical
@@ -8,7 +8,7 @@ window with a linear frame buffer. Some basic additional functionality
 is available, such as sprites, bitmap fonts, basic multi-threading,
 and vector math support.
 
-How to use:
+*How to use:*
 1. Copy the template folder (or extract the zip) to a fresh folder for
    your project. 
 2. Open the .sln file with any version of Visual Studio 2017/2019.
@@ -29,17 +29,17 @@ At some point, and depending on your requirements, you may want to
 advance to a more full-fledged library, or you can expand the template
 with OpenGL or SDL2 code.
 
-Credits
+*Credits*
 Although the template is small and bare bones, it still uses a lot of
 code gathered over the years:
 - EasyCE's 5x5 bitmap font (primarily used for debugging);
 - EasyCE's surface class (with lots of modifications);
 - Nils Desle's JobManager for efficient multi-threading.
 
-Copyright
+*Copyright*
 This code is completely free to use and distribute in any form.
 
-Remplate Naming
+*Remplate Naming*
 Starting January 2018, the name of the template represents the version.
 This version also appears in the title of the window. Make sure you
 are using the most recent version.
@@ -48,7 +48,7 @@ Utrecht, 2015-2020, Utrecht University - Breda, 2014, NHTV/IGAD
 Jacco Bikker
 Report problems and suggestions to bikker.j@gmail.com .
 
-Changelog
+*Changelog*
 
 v2017-01: 
 initial DGDARC release.
