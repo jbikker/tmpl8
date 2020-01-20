@@ -1,6 +1,3 @@
-// 2019/07/31 - modified by Tsung-Wei Huang
-//  - fixed the missing comma in outputing JSON  
-//
 // 2019/06/13 - modified by Tsung-Wei Huang
 //  - added TaskView interface
 //
@@ -49,21 +46,21 @@ class ExecutorObserverInterface {
   @brief constructor-like method to call when the executor observer is fully created
   @param num_workers the number of the worker threads in the executor
   */
-  virtual void set_up(unsigned num_workers) = 0;
+  virtual void set_up(unsigned num_workers) {};
   
   /**
   @brief method to call before a worker thread executes a closure 
   @param worker_id the id of this worker thread 
   @param task_view a constant wrapper object to the task 
   */
-  virtual void on_entry(unsigned worker_id, TaskView task_view) = 0;
+  virtual void on_entry(unsigned worker_id, TaskView task_view) {};
   
   /**
   @brief method to call after a worker thread executed a closure
   @param worker_id the id of this worker thread 
   @param task_view a constant wrapper object to the task
   */
-  virtual void on_exit(unsigned worker_id, TaskView task_view) = 0;
+  virtual void on_exit(unsigned worker_id, TaskView task_view) {};
 };
 
 // ------------------------------------------------------------------
@@ -161,7 +158,6 @@ inline void ExecutorObserver::on_entry(unsigned w, TaskView tv) {
 
 // Procedure: on_exit
 inline void ExecutorObserver::on_exit(unsigned w, TaskView tv) {
-  static_cast<void>(tv);  // avoid warning from compiler
   assert(_timeline.executions[w].size() > 0);
   _timeline.executions[w].back().end = std::chrono::steady_clock::now();
 }
@@ -176,19 +172,12 @@ inline void ExecutorObserver::clear() {
 // Procedure: dump
 inline void ExecutorObserver::dump(std::ostream& os) const {
 
-  size_t first;
-
-  for(first = 0; first<_timeline.executions.size(); ++first) {
-    if(_timeline.executions[first].size() > 0) { 
-      break; 
-    }
-  }
-
   os << '[';
 
-  for(size_t w=first; w<_timeline.executions.size(); w++) {
+  for(size_t w=0; w<_timeline.executions.size(); w++) {
 
-    if(w != first && _timeline.executions[w].size() > 0) {
+    if(w != 0 && _timeline.executions[w].size() > 0 && 
+                 _timeline.executions[w-1].size() > 0) {
       os << ',';
     }
 

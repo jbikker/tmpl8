@@ -50,11 +50,6 @@ class Taskflow : public FlowBuilder {
     @brief queries the number of nodes in the taskflow
     */
     size_t num_nodes() const;
-    
-    /**
-    @brief queries the emptiness of the taskflow
-    */
-    bool empty() const;
 
     /**
     @brief creates a module task from a taskflow
@@ -118,11 +113,6 @@ inline size_t Taskflow::num_nodes() const {
   return _graph.size();
 }
 
-// Function: empty
-inline bool Taskflow::empty() const {
-  return _graph.empty();
-}
-
 // Function: name
 inline Taskflow& Taskflow::name(const std::string &name) {
   _name = name;
@@ -179,7 +169,7 @@ inline void Taskflow::dump(std::ostream& os) const {
     os << "\";\n";
 
     // dump the details of this taskflow
-    for(const auto& n : f->_graph.nodes()) {
+    for(const auto n : f->_graph.nodes()) {
       
       // regular task
       if(auto module = n->_module; !module) {
@@ -187,8 +177,8 @@ inline void Taskflow::dump(std::ostream& os) const {
       }
       // module task
       else {
-        os << 'p' << n.get() << "[shape=box3d, color=blue, label=\"";
-        if(n->_name.empty()) os << n.get();
+        os << 'p' << n << "[shape=box3d, color=blue, label=\"";
+        if(n->_name.empty()) os << n;
         else os << n->_name;
         os << " (Taskflow_";
         if(module->_name.empty()) os << module;
@@ -201,7 +191,7 @@ inline void Taskflow::dump(std::ostream& os) const {
         }
 
         for(const auto s : n->_successors) {
-          os << 'p' << n.get() << "->" << 'p' << s << ";\n";
+          os << 'p' << n << "->" << 'p' << s << ";\n";
         }
       }
     }

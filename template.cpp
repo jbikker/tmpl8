@@ -159,7 +159,6 @@ void main()
 tf::Executor executor;
 tf::Taskflow taskflow;
 void RunTasks() { executor.run( taskflow ); }
-bool TasksRunning() { return !taskflow.empty(); }
 void WaitForAll() { executor.wait_for_all(); }
 
 // OpenGL helper functions

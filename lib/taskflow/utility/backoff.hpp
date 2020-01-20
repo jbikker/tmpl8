@@ -86,8 +86,6 @@ class ExponentialBackoff {
   static constexpr int LOOPS_BEFORE_YIELD = 16;
   
   public:
-    
-    ExponentialBackoff() = default;
 
     void backoff() {
       if(_count <= LOOPS_BEFORE_YIELD) {
@@ -124,8 +122,6 @@ class ExponentialBackoff {
 class LinearBackoff {
   
   public:
-
-    LinearBackoff() = default;
 
     void backoff() {
       if(_count <= 16) {

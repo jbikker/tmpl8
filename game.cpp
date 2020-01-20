@@ -1,12 +1,17 @@
 #include "precomp.h" // include (only) this in every .cpp file
 
+void Game::Dummy()
+{
+	printf( "Task A\n" );	
+}
+
 // -----------------------------------------------------------
 // Initialize the application
 // -----------------------------------------------------------
 void Game::Init()
 {
-	AddTask( [](){ printf( "Task A\n" ); } );
-	AddTask( [](){ printf( "Task B\n" ); } );
+	AddTask( [&](){ this->Dummy(); } );
+	AddTask( [](){} );
 	RunTasks();
 	WaitForAll();
 }

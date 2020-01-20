@@ -219,24 +219,16 @@ void SingularAllocator<T>::destroy(T* ptr) {
 // Allocate a memory piece of type T from the memory pool and return the T* to that memory.
 template <typename T>
 T* SingularAllocator<T>::allocate(size_t n) {
-  if(n == 1) {
-    return get_singular_mempool_manager<T>().get_per_thread_mempool()->allocate();
-  }
-  else {
-    throw std::runtime_error("can only allocate one object");
-  }
+  assert(n == 1);
+  return get_singular_mempool_manager<T>().get_per_thread_mempool()->allocate();
 }
 
 // Function: deallocate
 // Deallocate given memory piece of type T.
 template <typename T>
 void SingularAllocator<T>::deallocate(T* ptr, size_t n) {
-  if(n == 1) {
-    get_singular_mempool_manager<T>().get_per_thread_mempool()->deallocate(ptr); 
-  }
-  else {
-    throw std::runtime_error("can only deallocate one object");
-  }
+  assert(n == 1);
+  get_singular_mempool_manager<T>().get_per_thread_mempool()->deallocate(ptr); 
 }
 
 }  // End of namespace tf. ----------------------------------------------------

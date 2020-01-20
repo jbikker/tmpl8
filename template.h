@@ -195,7 +195,6 @@ using namespace tf;
 extern Taskflow taskflow;
 template <typename C> void AddTask( C&& callable ) { taskflow.emplace( callable ); }
 void RunTasks();
-bool TasksRunning();
 void WaitForAll();
 
 // Random numbers

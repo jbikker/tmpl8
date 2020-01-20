@@ -7,6 +7,7 @@ class Game
 public:
 	void SetTarget( Surface* surface ) { screen = surface; }
 	void Init();
+	void Dummy();
 	void Shutdown();
 	void Tick( float deltaTime );
 	void MouseUp( int button ) { /* implement if you want to detect mouse button presses */ }

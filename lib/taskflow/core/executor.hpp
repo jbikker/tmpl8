@@ -1,3 +1,43 @@
+// 2019/06/11 - modified by Tsung-Wei Huang
+//  - fixed the bug in calling observer while the user
+//    may clear the data
+//  - added object pool for nodes
+//
+// 2019/05/17 - modified by Chun-Xun Lin
+//  - moved topology to taskflow
+//  - TODO: can we use aggressive find_victim method
+//          to replace the spin?
+//  - TODO: need to check why one worker runs slower
+//          than sequential version
+// 
+// 2019/05/14 - modified by Tsung-Wei Huang
+//  - isolated the executor from the taskflow
+//
+// 2019/04/09 - modified by Tsung-Wei Huang
+//  - removed silent_dispatch method
+//
+// 2019/03/12 - modified by Chun-Xun Lin
+//  - added taskflow
+//
+// 2019/02/11 - modified by Tsung-Wei Huang
+//  - refactored run_until
+//  - added allocator to topologies
+//  - changed to list for topologies
+//
+// 2019/02/10 - modified by Chun-Xun Lin
+//  - added run_n to execute taskflow
+//  - finished first peer-review with TW
+//
+// 2018/07 - 2019/02/09 - missing logs
+//
+// 2018/06/30 - created by Tsung-Wei Huang
+//  - added BasicTaskflow template
+
+// TODO items:
+// 1. come up with a better way to remove the "joined" links 
+//    during the execution of a static node (1st layer)
+//
+
 #pragma once
 
 #include <iostream>
@@ -35,7 +75,6 @@ class Executor {
   struct Worker {
     std::mt19937 rdgen { std::random_device{}() };
     WorkStealingQueue<Node*> queue;
-    std::optional<Node*> cache;
   };
     
   struct PerThread {
@@ -159,7 +198,6 @@ class Executor {
    
     std::condition_variable _topology_cv;
     std::mutex _topology_mutex;
-    std::mutex _queue_mutex;
 
     unsigned _num_topologies {0};
     
@@ -169,9 +207,10 @@ class Executor {
     std::vector<std::thread> _threads;
 
     WorkStealingQueue<Node*> _queue;
-
+    
     std::atomic<size_t> _num_actives {0};
     std::atomic<size_t> _num_thieves {0};
+    //std::atomic<size_t> _num_idlers  {0};
     std::atomic<bool>   _done        {0};
 
     Notifier _notifier;
@@ -182,21 +221,18 @@ class Executor {
 
     PerThread& _per_thread() const;
 
-    bool _wait_for_task(unsigned, std::optional<Node*>&);
+    bool _wait_for_tasks(unsigned, std::optional<Node*>&);
     
     void _spawn(unsigned);
     void _exploit_task(unsigned, std::optional<Node*>&);
     void _explore_task(unsigned, std::optional<Node*>&);
-    void _schedule(Node*, bool);
+    void _schedule(Node*);
     void _schedule(PassiveVector<Node*>&);
     void _invoke(unsigned, Node*);
     void _invoke_static_work(unsigned, Node*);
     void _invoke_dynamic_work(unsigned, Node*, Subflow&);
     void _init_module_node(Node*);
     void _tear_down_topology(Topology*); 
-    void _increment_topology();
-    void _decrement_topology();
-    void _decrement_topology_and_notify();
 };
 
 // Constructor
@@ -250,10 +286,16 @@ inline void Executor::_spawn(unsigned N) {
       while(1) {
         
         // execute the tasks.
+        run_task:
         _exploit_task(i, t);
 
+        // steal loop
+        if(_explore_task(i, t); t) {
+          goto run_task;
+        }
+        
         // wait for tasks
-        if(_wait_for_task(i, t) == false) {
+        if(_wait_for_tasks(i, t) == false) {
           break;
         }
       }
@@ -265,8 +307,8 @@ inline void Executor::_spawn(unsigned N) {
 // Function: _find_victim
 inline unsigned Executor::_find_victim(unsigned thief) {
   
-  /*unsigned l = 0;
-  unsigned r = _workers.size() - 1;
+  unsigned l = 0;
+  unsigned r = (unsigned int)_workers.size() - 1;
   unsigned vtm = std::uniform_int_distribution<unsigned>{l, r}(
     _workers[thief].rdgen
   );
@@ -282,17 +324,17 @@ inline unsigned Executor::_find_victim(unsigned thief) {
     if(++vtm; vtm == _workers.size()) {
       vtm = 0;
     }
-  } */
+  }
 
-  // try to look for a task from other workers
+  /*// try to look for a task from other workers
   for(unsigned vtm=0; vtm<_workers.size(); ++vtm){
     if((thief == vtm && !_queue.empty()) ||
        (thief != vtm && !_workers[vtm].queue.empty())) {
       return vtm;
     }
-  }
+  }*/
 
-  return static_cast<unsigned>(_workers.size());
+  return (unsigned)_workers.size();
 }
 
 // Function: _explore_task
@@ -301,19 +343,23 @@ inline void Executor::_explore_task(unsigned thief, std::optional<Node*>& t) {
   //assert(_workers[thief].queue.empty());
   assert(!t);
 
-  const unsigned l = 0;
-  const unsigned r = static_cast<unsigned>(_workers.size()) - 1;
+  //const unsigned l = 0;
+  //const unsigned r = _workers.size() - 1;
 
-  const size_t F = (_workers.size() + 1) << 1;
+  const size_t F = (_workers.size() + 1);
   const size_t Y = 100;
+
+  steal_loop:
 
   size_t f = 0;
   size_t y = 0;
 
+  ++_num_thieves;
+  
   // explore
   while(!_done) {
   
-    unsigned vtm = std::uniform_int_distribution<unsigned>{l, r}(
+    /*unsigned vtm = std::uniform_int_distribution<unsigned>{l, r}(
       _workers[thief].rdgen
     );
       
@@ -324,12 +370,12 @@ inline void Executor::_explore_task(unsigned thief, std::optional<Node*>& t) {
     }
 
     if(f++ > F) {
-      if(std::this_thread::yield(); y++ > Y) {
+      if(std::this_thread::yield(); y++ > 100) {
         break;
       }
-    }
+    }*/
 
-    /*if(auto vtm = _find_victim(thief); vtm != _workers.size()) {
+    if(auto vtm = _find_victim(thief); vtm != _workers.size()) {
       t = (vtm == thief) ? _queue.steal() : _workers[vtm].queue.steal();
       // successful thief
       if(t) {
@@ -342,89 +388,74 @@ inline void Executor::_explore_task(unsigned thief, std::optional<Node*>& t) {
           break;
         }
       }
-    }*/
+    }
   }
-
+  
+  // We need to ensure at least one thieve if there is an
+  // active worker
+  if(auto N = --_num_thieves; N == 0) {
+    if(t != std::nullopt) {
+      _notifier.notify(false);
+      return;
+    }
+    else if(_num_actives > 0) {
+      goto steal_loop;
+    }
+  }
 }
 
 // Procedure: _exploit_task
 inline void Executor::_exploit_task(unsigned i, std::optional<Node*>& t) {
-  
-  assert(!_workers[i].cache);
 
   if(t) {
+
     auto& worker = _workers[i];
-    if(_num_actives.fetch_add(1) == 0 && _num_thieves == 0) {
+
+    if(++_num_actives; _num_thieves == 0) {
       _notifier.notify(false);
     }
+
     do {
       _invoke(i, *t);
-
-      if(worker.cache) {
-        t = *worker.cache;
-        worker.cache = std::nullopt;
-      }
-      else {
-        t = worker.queue.pop();
-      }
-
+      t = worker.queue.pop();
     } while(t);
 
     --_num_actives;
   }
 }
 
-// Function: _wait_for_task
-inline bool Executor::_wait_for_task(unsigned me, std::optional<Node*>& t) {
-
-  wait_for_task:
+// Function: _wait_for_tasks
+inline bool Executor::_wait_for_tasks(unsigned me, std::optional<Node*>& t) {
 
   assert(!t);
-
-  ++_num_thieves;
-
-  explore_task:
-
-  if(_explore_task(me, t); t) {
-    if(auto N = _num_thieves.fetch_sub(1); N == 1) {
-      _notifier.notify(false);
-    }
+  
+  _notifier.prepare_wait(&_waiters[me]);
+  
+  if(auto vtm = _find_victim(me); vtm != _workers.size()) {
+    _notifier.cancel_wait(&_waiters[me]);
+    t = (vtm == me) ? _queue.steal() : _workers[vtm].queue.steal();
     return true;
   }
 
-  _notifier.prepare_wait(&_waiters[me]);
-  
-  //if(auto vtm = _find_victim(me); vtm != _workers.size()) {
-  if(!_queue.empty()) {
-
-    _notifier.cancel_wait(&_waiters[me]);
-    //t = (vtm == me) ? _queue.steal() : _workers[vtm].queue.steal();
-
-    if(t = _queue.steal(); t) {
-      if(auto N = _num_thieves.fetch_sub(1); N == 1) {
-        _notifier.notify(false);
-      }
-      return true;
-    }
-    else {
-      goto explore_task;
-    }
-  }
+  //if(size_t I = ++_num_idlers; _done && I == _workers.size()) {
+  //  _notifier.cancel_wait(&_waiters[me]);
+  //  //if(_find_victim(me) != _workers.size()) {
+  //  //  --_num_idlers;
+  //  //  return true;
+  //  //}
+  //  _notifier.notify(true);
+  //  return false;
+  //}
 
   if(_done) {
     _notifier.cancel_wait(&_waiters[me]);
     _notifier.notify(true);
-    --_num_thieves;
     return false;
-  }
-
-  if(_num_thieves.fetch_sub(1) == 1 && _num_actives) {
-    _notifier.cancel_wait(&_waiters[me]);
-    goto wait_for_task;
   }
     
   // Now I really need to relinguish my self to others
   _notifier.commit_wait(&_waiters[me]);
+  //--_num_idlers;
 
   return true;
 }
@@ -434,7 +465,7 @@ template<typename Observer, typename... Args>
 Observer* Executor::make_observer(Args&&... args) {
   // use a local variable to mimic the constructor 
   auto tmp = std::make_unique<Observer>(std::forward<Args>(args)...);
-  tmp->set_up(_workers.size());
+  tmp->set_up(std::max(size_t{1}, _workers.size()));
   _observer = std::move(tmp);
   return static_cast<Observer*>(_observer.get());
 }
@@ -447,32 +478,27 @@ inline void Executor::remove_observer() {
 // Procedure: _schedule
 // The main procedure to schedule a give task node.
 // Each task node has two types of tasks - regular and subflow.
-inline void Executor::_schedule(Node* node, bool bypass) {
-  
-  assert(_workers.size() != 0);
+inline void Executor::_schedule(Node* node) {
   
   // module node need another initialization
-  if(node->_module != nullptr && !node->_module->empty() && !node->is_spawned()) {
+  if(node->_module != nullptr && !node->is_spawned()) {
     _init_module_node(node);
   }
   
-  // caller is a worker to this pool
-  if(auto& pt = _per_thread(); pt.pool == this) {
-    if(!bypass) {
-      _workers[pt.worker_id].queue.push(node);
-    }
-    else {
-      assert(!_workers[pt.worker_id].cache);
-      _workers[pt.worker_id].cache = node;
-    }
+  //no worker thread available
+  if(_workers.size() == 0){
+    _invoke(0, node);
     return;
   }
 
-  // other threads
-  {
-    std::scoped_lock lock(_queue_mutex);
-    _queue.push(node);
+  // caller is a worker to this pool
+  if(auto& pt = _per_thread(); pt.pool == this) {
+    _workers[pt.worker_id].queue.push(node);
+    return;
   }
+
+  // master threads
+  _queue.push(node);
 
   _notifier.notify(false);
 }
@@ -481,8 +507,6 @@ inline void Executor::_schedule(Node* node, bool bypass) {
 // The main procedure to schedule a set of task nodes.
 // Each task node has two types of tasks - regular and subflow.
 inline void Executor::_schedule(PassiveVector<Node*>& nodes) {
-
-  assert(_workers.size() != 0);
   
   // We need to cacth the node count to avoid accessing the nodes
   // vector while the parent topology is removed!
@@ -493,9 +517,17 @@ inline void Executor::_schedule(PassiveVector<Node*>& nodes) {
   }
 
   for(auto node : nodes) {
-    if(node->_module != nullptr && !node->_module->empty() && !node->is_spawned()) {
+    if(node->_module != nullptr && !node->is_spawned()) {
       _init_module_node(node);
     }
+  }
+
+  //no worker thread available
+  if(_workers.size() == 0){
+    for(auto node: nodes){
+      _invoke(0, node);
+    }
+    return;
   }
 
   // worker thread
@@ -506,22 +538,22 @@ inline void Executor::_schedule(PassiveVector<Node*>& nodes) {
     return;
   }
   
-  // other threads
-  {
-    std::scoped_lock lock(_queue_mutex);
-    for(size_t k=0; k<num_nodes; ++k) {
-      _queue.push(nodes[k]);
-    }
+  // master thread
+  for(size_t k=0; k<num_nodes; ++k) {
+    _queue.push(nodes[k]);
+    _notifier.notify(false);
   }
+  
+  //size_t N = std::max(size_t{1}, std::min(_num_idlers.load(), num_nodes));
 
-  if(num_nodes >= _workers.size()) {
-    _notifier.notify(true);
-  }
-  else {
-    for(size_t k=0; k<num_nodes; ++k) {
-      _notifier.notify(false);
-    }
-  }
+  //if(N >= _workers.size()) {
+  //  _notifier.notify(true);
+  //}
+  //else {
+  //  for(size_t k=0; k<N; ++k) {
+  //    _notifier.notify(false);
+  //  }
+  //}
 }
 
 // Procedure: _init_module_node
@@ -543,14 +575,14 @@ inline void Executor::_init_module_node(Node* node) {
 
     PassiveVector<Node*> src;
 
-    for(auto& n: node->_module->_graph.nodes()) {
+    for(auto n: node->_module->_graph.nodes()) {
       n->_topology = node->_topology;
       if(n->num_dependents() == 0) {
-        src.push_back(n.get());
+        src.push_back(n);
       }
       if(n->num_successors() == 0) {
         n->precede(*node);
-        tgt.push_back(n.get());
+        tgt.push_back(n);
       }
     }
 
@@ -558,18 +590,16 @@ inline void Executor::_init_module_node(Node* node) {
   };
 }
 
-// Procedure: _invoke
+// Procedure: 
 inline void Executor::_invoke(unsigned me, Node* node) {
-
-  assert(_workers.size() != 0);
 
   // Here we need to fetch the num_successors first to avoid the invalid memory
   // access caused by topology clear.
   const auto num_successors = node->num_successors();
 
-  // static task
+  // regular node type
   // The default node work type. We only need to execute the callback if any.
-  if(auto index=node->_work.index(); index == 1) {
+  if(auto index=node->_work.index(); index == 0) {
     if(node->_module != nullptr) {
       bool first_time = !node->is_spawned();
       _invoke_static_work(me, node);
@@ -578,20 +608,17 @@ inline void Executor::_invoke(unsigned me, Node* node) {
       }
     }
     else {
-      _invoke_static_work(me, node);
+      if(auto &f = std::get<Node::StaticWork>(node->_work); f != nullptr){
+        _invoke_static_work(me, node);
+      }
     }
   }
-  // dynamic task
-  else if (index == 2){
+  // subflow node type 
+  else {
     
     // Clear the subgraph before the task execution
     if(!node->is_spawned()) {
-      if(node->_subgraph) {
-        node->_subgraph->clear();
-      }
-      else {
-        node->_subgraph.emplace();
-      }
+      node->_subgraph.emplace();
     }
    
     Subflow fb(*(node->_subgraph));
@@ -604,25 +631,25 @@ inline void Executor::_invoke(unsigned me, Node* node) {
       if(!node->_subgraph->empty()) {
         // For storing the source nodes
         PassiveVector<Node*> src; 
-        for(auto& n: node->_subgraph->nodes()) {
+        for(auto n: node->_subgraph->nodes()) {
           n->_topology = node->_topology;
           n->set_subtask();
           if(n->num_successors() == 0) {
             if(fb.detached()) {
-              node->_topology->_num_sinks++;
+              node->_topology->_num_sinks ++;
             }
             else {
               n->precede(*node);
             }
           }
           if(n->num_dependents() == 0) {
-            src.push_back(n.get());
+            src.push_back(n);
           }
         }
 
         _schedule(src);
 
-        if(fb.joined()) {
+        if(!fb.detached()) {
           return;
         }
       }
@@ -636,7 +663,7 @@ inline void Executor::_invoke(unsigned me, Node* node) {
   if(!node->is_subtask()) {
     // Only dynamic tasking needs to restore _dependents
     // TODO:
-    if(node->_work.index() == 2 && !node->_subgraph->empty()) {
+    if(node->_work.index() == 1 &&  !node->_subgraph->empty()) {
       while(!node->_dependents.empty() && node->_dependents.back()->is_subtask()) {
         node->_dependents.pop_back();
       }
@@ -646,25 +673,18 @@ inline void Executor::_invoke(unsigned me, Node* node) {
   }
 
   // At this point, the node storage might be destructed.
-  Node* cache {nullptr};
-
   for(size_t i=0; i<num_successors; ++i) {
     if(--(node->_successors[i]->_num_dependents) == 0) {
-      if(cache) {
-        _schedule(cache, false);
-      }
-      cache = node->_successors[i];
+      _schedule(node->_successors[i]);
     }
-  }
-
-  if(cache) {
-    _schedule(cache, true);
   }
 
   // A node without any successor should check the termination of topology
   if(num_successors == 0) {
     if(--(node->_topology->_num_sinks) == 0) {
-      _tear_down_topology(node->_topology);
+      if(_workers.size() > 0) {   // finishing this topology
+        _tear_down_topology(node->_topology);
+      }
     }
   }
 }
@@ -750,16 +770,17 @@ inline void Executor::_tear_down_topology(Topology* tpg) {
       tpg->_promise.set_value();
       f._topologies.pop_front();
       f._mtx.unlock();
-      
-      // decrement the topology but since this is not the last we don't notify
-      _decrement_topology();
+
+      {
+        std::scoped_lock lock(_topology_mutex);
+        _num_topologies--;
+      }
 
       f._topologies.front()._bind(f._graph);
       _schedule(f._topologies.front()._sources);
     }
     else {
       assert(f._topologies.size() == 1);
-
       // Need to back up the promise first here becuz taskflow might be 
       // destroy before taskflow leaves
       auto p {std::move(tpg->_promise)};
@@ -770,8 +791,11 @@ inline void Executor::_tear_down_topology(Topology* tpg) {
 
       // We set the promise in the end in case taskflow leaves before taskflow
       p.set_value();
-
-      _decrement_topology_and_notify();
+      {
+        std::scoped_lock lock(_topology_mutex);
+        _num_topologies--;
+      }
+      _topology_cv.notify_one();
     }
   }
 }
@@ -782,54 +806,39 @@ std::future<void> Executor::run_until(Taskflow& f, P&& pred, C&& c) {
 
   // Predicate must return a boolean value
   static_assert(std::is_invocable_v<C> && std::is_invocable_v<P>);
-  
-  _increment_topology();
 
-  // Special case of predicate
-  if(f.empty() || std::invoke(pred)) {
-    std::promise<void> promise;
-    promise.set_value();
-    _decrement_topology_and_notify();
-    return promise.get_future();
+  if(std::invoke(pred)) {
+    return std::async(std::launch::deferred, [](){});
   }
   
+  // Speicla case of zero workers needs
+  //  - iterative execution to avoid stack overflow
+  //  - avoid execution of last_work
   if(_workers.size() == 0) {
-    TF_THROW(Error::EXECUTOR, "no workers to execute the graph");
+    
+    Topology tpg(f, std::forward<P>(pred), std::forward<C>(c));
+
+    // Clear last execution data & Build precedence between nodes and target
+    tpg._bind(f._graph);
+
+    do {
+      _schedule(tpg._sources);
+      tpg._recover_num_sinks();
+    } while(!std::invoke(tpg._pred));
+
+    if(tpg._call != nullptr) {
+      std::invoke(tpg._call);
+    }
+    
+    return std::async(std::launch::deferred, [](){});
   }
   
-  //// Special case of zero workers requires:
-  ////  - iterative execution to avoid stack overflow
-  ////  - avoid execution of last_work
-  //if(_workers.size() == 0) {
-  //  
-  //  Topology tpg(f, std::forward<P>(pred), std::forward<C>(c));
+  // has worker(s)
+  {
+    std::scoped_lock lock(_topology_mutex);
+    _num_topologies++;
+  }
 
-  //  // Clear last execution data & Build precedence between nodes and target
-  //  tpg._bind(f._graph);
-
-  //  std::stack<Node*> stack;
-
-  //  do {
-  //    _schedule_unsync(tpg._sources, stack);
-  //    while(!stack.empty()) {
-  //      auto node = stack.top();
-  //      stack.pop();
-  //      _invoke_unsync(node, stack);
-  //    }
-  //    tpg._recover_num_sinks();
-  //  } while(!std::invoke(tpg._pred));
-
-  //  if(tpg._call != nullptr) {
-  //    std::invoke(tpg._call);
-  //  }
-
-  //  tpg._promise.set_value();
-  //  
-  //  _decrement_topology_and_notify();
-  //  
-  //  return tpg._promise.get_future();
-  //}
-  
   // Multi-threaded execution.
   bool run_now {false};
   Topology* tpg;
@@ -857,26 +866,6 @@ std::future<void> Executor::run_until(Taskflow& f, P&& pred, C&& c) {
   }
 
   return future;
-}
-
-// Procedure: _increment_topology
-inline void Executor::_increment_topology() {
-  std::scoped_lock<std::mutex> lock(_topology_mutex);
-  ++_num_topologies;
-}
-
-// Procedure: _decrement_topology_and_notify
-inline void Executor::_decrement_topology_and_notify() {
-  std::scoped_lock<std::mutex> lock(_topology_mutex);
-  if(--_num_topologies == 0) {
-    _topology_cv.notify_all();
-  }
-}
-
-// Procedure: _decrement_topology
-inline void Executor::_decrement_topology() {
-  std::scoped_lock lock(_topology_mutex);
-  --_num_topologies;
 }
 
 // Procedure: wait_for_all
