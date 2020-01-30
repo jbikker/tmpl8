@@ -42,21 +42,21 @@ void ReshapeWindowCallback( GLFWwindow* window, int w, int h )
 void KeyEventCallback( GLFWwindow* window, int key, int scancode, int action, int mods )
 {
 	if (key == GLFW_KEY_ESCAPE) running = false;
-	if (action == GLFW_PRESS) if (game) game->KeyDown( key );
-	else if (action == GLFW_RELEASE) if (game) game->KeyUp( key );
+	if (action == GLFW_PRESS) { if (game) game->KeyDown( key ); }
+	else if (action == GLFW_RELEASE) { if (game) game->KeyUp( key ); }
 }
 void CharEventCallback( GLFWwindow* window, uint code ) { /* nothing here yet */ }
 void WindowFocusCallback( GLFWwindow* window, int focused ) { hasFocus = (focused == GL_TRUE); }
 void MouseButtonCallback( GLFWwindow* window, int button, int action, int mods )
 {
-	if (action == GLFW_PRESS) if (game) game->MouseDown( button );
-	else if (action == GLFW_RELEASE) if (game) game->MouseUp( button );
+	if (action == GLFW_PRESS) { if (game) game->MouseDown( button ); }
+	else if (action == GLFW_RELEASE) { if (game) game->MouseUp( button ); }
 }
 void MousePosCallback( GLFWwindow* window, double x, double y )
 {
 	if (game) game->MouseMove( (int)x, (int)y );
 }
-void ErrorCallback( int error, const char*description )
+void ErrorCallback( int error, const char* description )
 {
 	fprintf( stderr, "GLFW Error: %s\n", description );
 }
@@ -292,14 +292,14 @@ void JobManager::GetProcessorCount( uint& cores, uint& logical )
 }
 
 JobManager* JobManager::GetJobManager()
-{ 
-	if (!m_JobManager) 
+{
+	if (!m_JobManager)
 	{
 		uint c, l;
 		GetProcessorCount( c, l );
-		CreateJobManager( l ); 
+		CreateJobManager( l );
 	}
-	return m_JobManager; 
+	return m_JobManager;
 }
 
 // OpenGL helper functions
@@ -308,7 +308,7 @@ void _CheckGL( const char* f, int l )
 	GLenum error = glGetError();
 	if (error != GL_NO_ERROR)
 	{
-		const char *errStr = "UNKNOWN ERROR";
+		const char* errStr = "UNKNOWN ERROR";
 		if (error == 0x500) errStr = "INVALID ENUM";
 		else if (error == 0x502) errStr = "INVALID OPERATION";
 		else if (error == 0x501) errStr = "INVALID VALUE";
@@ -331,11 +331,11 @@ void BindVBO( const uint idx, const uint N, const GLuint id )
 {
 	glEnableVertexAttribArray( idx );
 	glBindBuffer( GL_ARRAY_BUFFER, id );
-	glVertexAttribPointer( idx, N, GL_FLOAT, GL_FALSE, 0, (void *)0 );
+	glVertexAttribPointer( idx, N, GL_FLOAT, GL_FALSE, 0, (void*)0 );
 	CheckGL();
 }
 
-void CheckShader( GLuint shader, const char *vshader, const char *fshader )
+void CheckShader( GLuint shader, const char* vshader, const char* fshader )
 {
 	char buffer[1024];
 	memset( buffer, 0, sizeof( buffer ) );
@@ -345,7 +345,7 @@ void CheckShader( GLuint shader, const char *vshader, const char *fshader )
 	FATALERROR_IF( length > 0 && strstr( buffer, "ERROR" ), "Shader compile error:\n%s", buffer );
 }
 
-void CheckProgram( GLuint id, const char *vshader, const char *fshader )
+void CheckProgram( GLuint id, const char* vshader, const char* fshader )
 {
 	char buffer[1024];
 	memset( buffer, 0, sizeof( buffer ) );
@@ -404,7 +404,7 @@ GLTexture::GLTexture( uint w, uint h, uint type )
 	CheckGL();
 }
 
-GLTexture::GLTexture( const char *fileName, int filter )
+GLTexture::GLTexture( const char* fileName, int filter )
 {
 	GLuint textureType = GL_TEXTURE_2D;
 	glGenTextures( 1, &ID );
@@ -412,14 +412,14 @@ GLTexture::GLTexture( const char *fileName, int filter )
 	FREE_IMAGE_FORMAT fif = FIF_UNKNOWN;
 	fif = FreeImage_GetFileType( fileName, 0 );
 	if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename( fileName );
-	FIBITMAP *tmp = FreeImage_Load( fif, fileName );
+	FIBITMAP* tmp = FreeImage_Load( fif, fileName );
 	FATALERROR_IF( !tmp, "File %s not found", fileName );
-	FIBITMAP *dib = FreeImage_ConvertTo24Bits( tmp );
+	FIBITMAP* dib = FreeImage_ConvertTo24Bits( tmp );
 	FreeImage_Unload( tmp );
 	width = FreeImage_GetWidth( dib );
 	height = FreeImage_GetHeight( dib );
-	uint *data = new uint[width * height];
-	uchar *line = new uchar[width * 3];
+	uint* data = new uint[width * height];
+	uchar* line = new uchar[width * 3];
 	for (uint y = 0; y < height; y++)
 	{
 		memcpy( line, FreeImage_GetScanLine( dib, height - 1 - y ), width * 3 );
@@ -446,14 +446,14 @@ void GLTexture::Bind()
 	CheckGL();
 }
 
-void GLTexture::CopyFrom( Surface *src )
+void GLTexture::CopyFrom( Surface* src )
 {
 	glBindTexture( GL_TEXTURE_2D, ID );
 	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, src->GetBuffer() );
 	CheckGL();
 }
 
-void GLTexture::CopyTo( Surface *dst )
+void GLTexture::CopyTo( Surface* dst )
 {
 	glBindTexture( GL_TEXTURE_2D, ID );
 	glGetTexImage( GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, dst->GetBuffer() );
@@ -489,8 +489,8 @@ void Shader::Init( const char* vfile, const char* pfile )
 	string fsText = TextFileRead( pfile );
 	FATALERROR_IF( vsText.size() == 0, "File %s not found", vfile );
 	FATALERROR_IF( fsText.size() == 0, "File %s not found", pfile );
-	const char *vertexText = vsText.c_str();
-	const char *fragmentText = fsText.c_str();
+	const char* vertexText = vsText.c_str();
+	const char* fragmentText = fsText.c_str();
 	Compile( vertexText, fragmentText );
 }
 
@@ -526,7 +526,7 @@ void Shader::Unbind()
 	CheckGL();
 }
 
-void Shader::SetInputTexture( uint slot, const char *name, GLTexture* texture )
+void Shader::SetInputTexture( uint slot, const char* name, GLTexture* texture )
 {
 	glActiveTexture( GL_TEXTURE0 + slot );
 	glBindTexture( GL_TEXTURE_2D, texture->ID );
@@ -536,7 +536,7 @@ void Shader::SetInputTexture( uint slot, const char *name, GLTexture* texture )
 
 void Shader::SetInputMatrix( const char* name, const mat4& matrix )
 {
-	const GLfloat *data = (const GLfloat*)&matrix;
+	const GLfloat* data = (const GLfloat*)&matrix;
 	glUniformMatrix4fv( glGetUniformLocation( ID, name ), 1, GL_FALSE, data );
 	CheckGL();
 }
@@ -571,17 +571,17 @@ uint RandomUInt()
 float RandomFloat() { return RandomUInt() * 2.3283064365387e-10f; }
 float Rand( float range ) { return RandomFloat() * range; }
 // local seed
-uint RandomUInt( uint &seed )
+uint RandomUInt( uint& seed )
 {
 	seed ^= seed << 13;
 	seed ^= seed >> 17;
 	seed ^= seed << 5;
 	return seed;
 }
-float RandomFloat( uint &seed ) { return RandomUInt( seed ) * 2.3283064365387e-10f; }
+float RandomFloat( uint& seed ) { return RandomUInt( seed ) * 2.3283064365387e-10f; }
 
 // Math implementations
-mat4 operator*( const mat4 &a, const mat4 &b )
+mat4 operator*( const mat4& a, const mat4& b )
 {
 	mat4 r;
 	for (uint i = 0; i < 16; i += 4)
@@ -595,39 +595,39 @@ mat4 operator*( const mat4 &a, const mat4 &b )
 		}
 	return r;
 }
-mat4 operator*( const mat4 &a, const float s )
+mat4 operator*( const mat4& a, const float s )
 {
 	mat4 r;
 	for (uint i = 0; i < 16; i += 4) r.cell[i] = a.cell[i] * s;
 	return r;
 }
-mat4 operator*( const float s, const mat4 &a )
+mat4 operator*( const float s, const mat4& a )
 {
 	mat4 r;
 	for (uint i = 0; i < 16; i++) r.cell[i] = a.cell[i] * s;
 	return r;
 }
-mat4 operator+( const mat4 &a, const mat4 &b )
+mat4 operator+( const mat4& a, const mat4& b )
 {
 	mat4 r;
 	for (uint i = 0; i < 16; i += 4) r.cell[i] = a.cell[i] + b.cell[i];
 	return r;
 }
-bool operator==( const mat4 &a, const mat4 &b )
+bool operator==( const mat4& a, const mat4& b )
 {
 	for (uint i = 0; i < 16; i++)
 		if (a.cell[i] != b.cell[i]) return false;
 	return true;
 }
-bool operator!=( const mat4 &a, const mat4 &b ) { return !(a == b); }
-float4 operator*( const mat4 &a, const float4 &b )
+bool operator!=( const mat4& a, const mat4& b ) { return !(a == b); }
+float4 operator*( const mat4& a, const float4& b )
 {
 	return make_float4( a.cell[0] * b.x + a.cell[1] * b.y + a.cell[2] * b.z + a.cell[3] * b.w,
 		a.cell[4] * b.x + a.cell[5] * b.y + a.cell[6] * b.z + a.cell[7] * b.w,
 		a.cell[8] * b.x + a.cell[9] * b.y + a.cell[10] * b.z + a.cell[11] * b.w,
 		a.cell[12] * b.x + a.cell[13] * b.y + a.cell[14] * b.z + a.cell[15] * b.w );
 }
-float4 operator*( const float4 &b, const mat4 &a )
+float4 operator*( const float4& b, const mat4& a )
 {
 	return make_float4( a.cell[0] * b.x + a.cell[1] * b.y + a.cell[2] * b.z + a.cell[3] * b.w,
 		a.cell[4] * b.x + a.cell[5] * b.y + a.cell[6] * b.z + a.cell[7] * b.w,
@@ -636,7 +636,7 @@ float4 operator*( const float4 &b, const mat4 &a )
 }
 
 // Helper functions
-bool FileIsNewer( const char *file1, const char *file2 )
+bool FileIsNewer( const char* file1, const char* file2 )
 {
 	struct stat f1;
 	struct stat f2;
@@ -655,13 +655,13 @@ bool FileIsNewer( const char *file1, const char *file2 )
 #endif
 }
 
-bool FileExists( const char *f )
+bool FileExists( const char* f )
 {
 	ifstream s( f );
 	return s.good();
 }
 
-bool RemoveFile( const char *f )
+bool RemoveFile( const char* f )
 {
 	if (!FileExists( f )) return false;
 	return !remove( f );
@@ -673,18 +673,18 @@ uint FileSize( string filename )
 	return s.good();
 }
 
-string TextFileRead( const char *_File )
+string TextFileRead( const char* _File )
 {
 	ifstream s( _File );
 	string str( (istreambuf_iterator<char>( s )), istreambuf_iterator<char>() );
 	return str;
 }
 
-void TextFileWrite( const string &text, const char *_File )
+void TextFileWrite( const string& text, const char* _File )
 {
 	ofstream s( _File, ios::binary );
 	int len = (int)text.size();
-	s.write( (const char *)&len, sizeof( len ) );
+	s.write( (const char*)&len, sizeof( len ) );
 	s.write( text.c_str(), len );
 }
 
@@ -694,7 +694,7 @@ string LowerCase( string s )
 	return s;
 }
 
-void FatalError( const char *fmt, ... )
+void FatalError( const char* fmt, ... )
 {
 	char t[16384];
 	va_list args;
@@ -735,54 +735,54 @@ using namespace std;
 bool CheckCL( cl_int result, const char* file, int line )
 {
 	if (result == CL_SUCCESS) return true;
-	if (result == CL_DEVICE_NOT_FOUND) FatalError( file, line, "Error: CL_DEVICE_NOT_FOUND", "OpenCL error" );  
-	if (result == CL_DEVICE_NOT_AVAILABLE) FatalError( file, line, "Error: CL_DEVICE_NOT_AVAILABLE", "OpenCL error" );  
-	if (result == CL_COMPILER_NOT_AVAILABLE) FatalError( file, line, "Error: CL_COMPILER_NOT_AVAILABLE", "OpenCL error" );  
-	if (result == CL_MEM_OBJECT_ALLOCATION_FAILURE) FatalError( file, line, "Error: CL_MEM_OBJECT_ALLOCATION_FAILURE", "OpenCL error" );  
-	if (result == CL_OUT_OF_RESOURCES) FatalError( file, line, "Error: CL_OUT_OF_RESOURCES", "OpenCL error" );  
-	if (result == CL_OUT_OF_HOST_MEMORY) FatalError( file, line, "Error: CL_OUT_OF_HOST_MEMORY", "OpenCL error" );  
-	if (result == CL_PROFILING_INFO_NOT_AVAILABLE) FatalError( file, line, "Error: CL_PROFILING_INFO_NOT_AVAILABLE", "OpenCL error" );  
-	if (result == CL_MEM_COPY_OVERLAP) FatalError( file, line, "Error: CL_MEM_COPY_OVERLAP", "OpenCL error" );  
-	if (result == CL_IMAGE_FORMAT_MISMATCH) FatalError( file, line, "Error: CL_IMAGE_FORMAT_MISMATCH", "OpenCL error" );  
-	if (result == CL_IMAGE_FORMAT_NOT_SUPPORTED) FatalError( file, line, "Error: CL_IMAGE_FORMAT_NOT_SUPPORTED", "OpenCL error" );  
-	if (result == CL_BUILD_PROGRAM_FAILURE) FatalError( file, line, "Error: CL_BUILD_PROGRAM_FAILURE", "OpenCL error" );  
-	if (result == CL_MAP_FAILURE) FatalError( file, line, "Error: CL_MAP_FAILURE", "OpenCL error" );  
-	if (result == CL_MISALIGNED_SUB_BUFFER_OFFSET) FatalError( file, line, "Error: CL_MISALIGNED_SUB_BUFFER_OFFSET", "OpenCL error" );  
-	if (result == CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST) FatalError( file, line, "Error: CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST", "OpenCL error" );  
-	if (result == CL_INVALID_VALUE) FatalError( file, line, "Error: CL_INVALID_VALUE", "OpenCL error" );  
-	if (result == CL_INVALID_DEVICE_TYPE) FatalError( file, line, "Error: CL_INVALID_DEVICE_TYPE", "OpenCL error" );  
-	if (result == CL_INVALID_PLATFORM) FatalError( file, line, "Error: CL_INVALID_PLATFORM", "OpenCL error" );  
-	if (result == CL_INVALID_DEVICE) FatalError( file, line, "Error: CL_INVALID_DEVICE", "OpenCL error" );  
-	if (result == CL_INVALID_CONTEXT) FatalError( file, line, "Error: CL_INVALID_CONTEXT", "OpenCL error" );  
-	if (result == CL_INVALID_QUEUE_PROPERTIES) FatalError( file, line, "Error: CL_INVALID_QUEUE_PROPERTIES", "OpenCL error" );  
-	if (result == CL_INVALID_COMMAND_QUEUE) FatalError( file, line, "Error: CL_INVALID_COMMAND_QUEUE", "OpenCL error" );  
-	if (result == CL_INVALID_HOST_PTR) FatalError( file, line, "Error: CL_INVALID_HOST_PTR", "OpenCL error" );  
-	if (result == CL_INVALID_MEM_OBJECT) FatalError( file, line, "Error: CL_INVALID_MEM_OBJECT", "OpenCL error" );  
-	if (result == CL_INVALID_IMAGE_FORMAT_DESCRIPTOR) FatalError( file, line, "Error: CL_INVALID_IMAGE_FORMAT_DESCRIPTOR", "OpenCL error" );  
-	if (result == CL_INVALID_IMAGE_SIZE) FatalError( file, line, "Error: CL_INVALID_IMAGE_SIZE", "OpenCL error" );  
-	if (result == CL_INVALID_SAMPLER) FatalError( file, line, "Error: CL_INVALID_SAMPLER", "OpenCL error" );  
-	if (result == CL_INVALID_BINARY) FatalError( file, line, "Error: CL_INVALID_BINARY", "OpenCL error" );  
-	if (result == CL_INVALID_BUILD_OPTIONS) FatalError( file, line, "Error: CL_INVALID_BUILD_OPTIONS", "OpenCL error" );  
-	if (result == CL_INVALID_PROGRAM) FatalError( file, line, "Error: CL_INVALID_PROGRAM", "OpenCL error" );  
-	if (result == CL_INVALID_PROGRAM_EXECUTABLE) FatalError( file, line, "Error: CL_INVALID_PROGRAM_EXECUTABLE", "OpenCL error" );  
-	if (result == CL_INVALID_KERNEL_NAME) FatalError( file, line, "Error: CL_INVALID_KERNEL_NAME", "OpenCL error" );  
-	if (result == CL_INVALID_KERNEL_DEFINITION) FatalError( file, line, "Error: CL_INVALID_KERNEL_DEFINITION", "OpenCL error" );  
-	if (result == CL_INVALID_KERNEL) FatalError( file, line, "Error: CL_INVALID_KERNEL", "OpenCL error" );  
-	if (result == CL_INVALID_ARG_INDEX) FatalError( file, line, "Error: CL_INVALID_ARG_INDEX", "OpenCL error" );  
-	if (result == CL_INVALID_ARG_VALUE) FatalError( file, line, "Error: CL_INVALID_ARG_VALUE", "OpenCL error" );  
-	if (result == CL_INVALID_ARG_SIZE) FatalError( file, line, "Error: CL_INVALID_ARG_SIZE", "OpenCL error" );  
-	if (result == CL_INVALID_KERNEL_ARGS) FatalError( file, line, "Error: CL_INVALID_KERNEL_ARGS", "OpenCL error" );  
-	if (result == CL_INVALID_WORK_DIMENSION) FatalError( file, line, "Error: CL_INVALID_WORK_DIMENSION", "OpenCL error" );  
-	if (result == CL_INVALID_WORK_GROUP_SIZE) FatalError( file, line, "Error: CL_INVALID_WORK_GROUP_SIZE", "OpenCL error" );  
-	if (result == CL_INVALID_WORK_ITEM_SIZE) FatalError( file, line, "Error: CL_INVALID_WORK_ITEM_SIZE", "OpenCL error" );  
-	if (result == CL_INVALID_GLOBAL_OFFSET) FatalError( file, line, "Error: CL_INVALID_GLOBAL_OFFSET", "OpenCL error" );  
-	if (result == CL_INVALID_EVENT_WAIT_LIST) FatalError( file, line, "Error: CL_INVALID_EVENT_WAIT_LIST", "OpenCL error" );  
-	if (result == CL_INVALID_EVENT) FatalError( file, line, "Error: CL_INVALID_EVENT", "OpenCL error" );  
-	if (result == CL_INVALID_OPERATION) FatalError( file, line, "Error: CL_INVALID_OPERATION", "OpenCL error" );  
-	if (result == CL_INVALID_GL_OBJECT) FatalError( file, line, "Error: CL_INVALID_GL_OBJECT", "OpenCL error" );  
-	if (result == CL_INVALID_BUFFER_SIZE) FatalError( file, line, "Error: CL_INVALID_BUFFER_SIZE", "OpenCL error" );  
-	if (result == CL_INVALID_MIP_LEVEL) FatalError( file, line, "Error: CL_INVALID_MIP_LEVEL", "OpenCL error" );  
-	if (result == CL_INVALID_GLOBAL_WORK_SIZE) FatalError( file, line, "Error: CL_INVALID_GLOBAL_WORK_SIZE", "OpenCL error" ); 
+	if (result == CL_DEVICE_NOT_FOUND) FatalError( file, line, "Error: CL_DEVICE_NOT_FOUND", "OpenCL error" );
+	if (result == CL_DEVICE_NOT_AVAILABLE) FatalError( file, line, "Error: CL_DEVICE_NOT_AVAILABLE", "OpenCL error" );
+	if (result == CL_COMPILER_NOT_AVAILABLE) FatalError( file, line, "Error: CL_COMPILER_NOT_AVAILABLE", "OpenCL error" );
+	if (result == CL_MEM_OBJECT_ALLOCATION_FAILURE) FatalError( file, line, "Error: CL_MEM_OBJECT_ALLOCATION_FAILURE", "OpenCL error" );
+	if (result == CL_OUT_OF_RESOURCES) FatalError( file, line, "Error: CL_OUT_OF_RESOURCES", "OpenCL error" );
+	if (result == CL_OUT_OF_HOST_MEMORY) FatalError( file, line, "Error: CL_OUT_OF_HOST_MEMORY", "OpenCL error" );
+	if (result == CL_PROFILING_INFO_NOT_AVAILABLE) FatalError( file, line, "Error: CL_PROFILING_INFO_NOT_AVAILABLE", "OpenCL error" );
+	if (result == CL_MEM_COPY_OVERLAP) FatalError( file, line, "Error: CL_MEM_COPY_OVERLAP", "OpenCL error" );
+	if (result == CL_IMAGE_FORMAT_MISMATCH) FatalError( file, line, "Error: CL_IMAGE_FORMAT_MISMATCH", "OpenCL error" );
+	if (result == CL_IMAGE_FORMAT_NOT_SUPPORTED) FatalError( file, line, "Error: CL_IMAGE_FORMAT_NOT_SUPPORTED", "OpenCL error" );
+	if (result == CL_BUILD_PROGRAM_FAILURE) FatalError( file, line, "Error: CL_BUILD_PROGRAM_FAILURE", "OpenCL error" );
+	if (result == CL_MAP_FAILURE) FatalError( file, line, "Error: CL_MAP_FAILURE", "OpenCL error" );
+	if (result == CL_MISALIGNED_SUB_BUFFER_OFFSET) FatalError( file, line, "Error: CL_MISALIGNED_SUB_BUFFER_OFFSET", "OpenCL error" );
+	if (result == CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST) FatalError( file, line, "Error: CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST", "OpenCL error" );
+	if (result == CL_INVALID_VALUE) FatalError( file, line, "Error: CL_INVALID_VALUE", "OpenCL error" );
+	if (result == CL_INVALID_DEVICE_TYPE) FatalError( file, line, "Error: CL_INVALID_DEVICE_TYPE", "OpenCL error" );
+	if (result == CL_INVALID_PLATFORM) FatalError( file, line, "Error: CL_INVALID_PLATFORM", "OpenCL error" );
+	if (result == CL_INVALID_DEVICE) FatalError( file, line, "Error: CL_INVALID_DEVICE", "OpenCL error" );
+	if (result == CL_INVALID_CONTEXT) FatalError( file, line, "Error: CL_INVALID_CONTEXT", "OpenCL error" );
+	if (result == CL_INVALID_QUEUE_PROPERTIES) FatalError( file, line, "Error: CL_INVALID_QUEUE_PROPERTIES", "OpenCL error" );
+	if (result == CL_INVALID_COMMAND_QUEUE) FatalError( file, line, "Error: CL_INVALID_COMMAND_QUEUE", "OpenCL error" );
+	if (result == CL_INVALID_HOST_PTR) FatalError( file, line, "Error: CL_INVALID_HOST_PTR", "OpenCL error" );
+	if (result == CL_INVALID_MEM_OBJECT) FatalError( file, line, "Error: CL_INVALID_MEM_OBJECT", "OpenCL error" );
+	if (result == CL_INVALID_IMAGE_FORMAT_DESCRIPTOR) FatalError( file, line, "Error: CL_INVALID_IMAGE_FORMAT_DESCRIPTOR", "OpenCL error" );
+	if (result == CL_INVALID_IMAGE_SIZE) FatalError( file, line, "Error: CL_INVALID_IMAGE_SIZE", "OpenCL error" );
+	if (result == CL_INVALID_SAMPLER) FatalError( file, line, "Error: CL_INVALID_SAMPLER", "OpenCL error" );
+	if (result == CL_INVALID_BINARY) FatalError( file, line, "Error: CL_INVALID_BINARY", "OpenCL error" );
+	if (result == CL_INVALID_BUILD_OPTIONS) FatalError( file, line, "Error: CL_INVALID_BUILD_OPTIONS", "OpenCL error" );
+	if (result == CL_INVALID_PROGRAM) FatalError( file, line, "Error: CL_INVALID_PROGRAM", "OpenCL error" );
+	if (result == CL_INVALID_PROGRAM_EXECUTABLE) FatalError( file, line, "Error: CL_INVALID_PROGRAM_EXECUTABLE", "OpenCL error" );
+	if (result == CL_INVALID_KERNEL_NAME) FatalError( file, line, "Error: CL_INVALID_KERNEL_NAME", "OpenCL error" );
+	if (result == CL_INVALID_KERNEL_DEFINITION) FatalError( file, line, "Error: CL_INVALID_KERNEL_DEFINITION", "OpenCL error" );
+	if (result == CL_INVALID_KERNEL) FatalError( file, line, "Error: CL_INVALID_KERNEL", "OpenCL error" );
+	if (result == CL_INVALID_ARG_INDEX) FatalError( file, line, "Error: CL_INVALID_ARG_INDEX", "OpenCL error" );
+	if (result == CL_INVALID_ARG_VALUE) FatalError( file, line, "Error: CL_INVALID_ARG_VALUE", "OpenCL error" );
+	if (result == CL_INVALID_ARG_SIZE) FatalError( file, line, "Error: CL_INVALID_ARG_SIZE", "OpenCL error" );
+	if (result == CL_INVALID_KERNEL_ARGS) FatalError( file, line, "Error: CL_INVALID_KERNEL_ARGS", "OpenCL error" );
+	if (result == CL_INVALID_WORK_DIMENSION) FatalError( file, line, "Error: CL_INVALID_WORK_DIMENSION", "OpenCL error" );
+	if (result == CL_INVALID_WORK_GROUP_SIZE) FatalError( file, line, "Error: CL_INVALID_WORK_GROUP_SIZE", "OpenCL error" );
+	if (result == CL_INVALID_WORK_ITEM_SIZE) FatalError( file, line, "Error: CL_INVALID_WORK_ITEM_SIZE", "OpenCL error" );
+	if (result == CL_INVALID_GLOBAL_OFFSET) FatalError( file, line, "Error: CL_INVALID_GLOBAL_OFFSET", "OpenCL error" );
+	if (result == CL_INVALID_EVENT_WAIT_LIST) FatalError( file, line, "Error: CL_INVALID_EVENT_WAIT_LIST", "OpenCL error" );
+	if (result == CL_INVALID_EVENT) FatalError( file, line, "Error: CL_INVALID_EVENT", "OpenCL error" );
+	if (result == CL_INVALID_OPERATION) FatalError( file, line, "Error: CL_INVALID_OPERATION", "OpenCL error" );
+	if (result == CL_INVALID_GL_OBJECT) FatalError( file, line, "Error: CL_INVALID_GL_OBJECT", "OpenCL error" );
+	if (result == CL_INVALID_BUFFER_SIZE) FatalError( file, line, "Error: CL_INVALID_BUFFER_SIZE", "OpenCL error" );
+	if (result == CL_INVALID_MIP_LEVEL) FatalError( file, line, "Error: CL_INVALID_MIP_LEVEL", "OpenCL error" );
+	if (result == CL_INVALID_GLOBAL_WORK_SIZE) FatalError( file, line, "Error: CL_INVALID_GLOBAL_WORK_SIZE", "OpenCL error" );
 	return false;
 }
 
@@ -805,7 +805,7 @@ static cl_device_id getFirstDevice( cl_context context )
 static cl_int getPlatformID( cl_platform_id* platform )
 {
 	char chBuffer[1024];
-	cl_uint num_platforms, devCount; 
+	cl_uint num_platforms, devCount;
 	cl_platform_id* clPlatformIDs;
 	cl_int error;
 	*platform = NULL;
@@ -821,19 +821,19 @@ static cl_int getPlatformID( cl_platform_id* platform )
 	char* deviceOrder[2][3] = { { "NVIDIA", "AMD", "" }, { "", "", "" } };
 #endif
 	printf( "available OpenCL platforms:\n" );
-	for( cl_uint i = 0; i < num_platforms; ++i )
+	for (cl_uint i = 0; i < num_platforms; ++i)
 	{
 		CHECKCL( error = clGetPlatformInfo( clPlatformIDs[i], CL_PLATFORM_NAME, 1024, &chBuffer, NULL ) );
 		printf( "#%i: %s\n", i, chBuffer );
 	}
-	for( cl_uint j = 0; j < 2; j++ ) for( int k = 0; k < 3; k++ )
+	for (cl_uint j = 0; j < 2; j++) for (int k = 0; k < 3; k++)
 	{
-		for( cl_uint i = 0; i < num_platforms; ++i )
+		for (cl_uint i = 0; i < num_platforms; ++i)
 		{
 			error = clGetDeviceIDs( clPlatformIDs[i], deviceType[j], 0, NULL, &devCount );
 			if ((error != CL_SUCCESS) || (devCount == 0)) continue;
 			CHECKCL( error = clGetPlatformInfo( clPlatformIDs[i], CL_PLATFORM_NAME, 1024, &chBuffer, NULL ) );
-			if (deviceOrder[j][k][0]) if (!strstr( chBuffer, deviceOrder[j][k])) continue;
+			if (deviceOrder[j][k][0]) if (!strstr( chBuffer, deviceOrder[j][k] )) continue;
 			printf( "OpenCL device: %s\n", chBuffer );
 			*platform = clPlatformIDs[i];
 			j = 2, k = 3;
@@ -852,18 +852,18 @@ static char* loadSource( const char* file, size_t* size )
 	// extract path from source file name
 	char path[2048];
 	strcpy( path, file );
-	char* marker = path, *fileName = (char*)file;
+	char* marker = path, * fileName = (char*)file;
 	while (strstr( marker + 1, "\\" )) marker = strstr( marker + 1, "\\" );
 	while (strstr( marker + 1, "/" )) marker = strstr( marker + 1, "/" );
 	while (strstr( fileName + 1, "\\" )) fileName = strstr( fileName + 1, "\\" );
 	while (strstr( fileName + 1, "/" )) fileName = strstr( fileName + 1, "/" );
 	if (fileName != file) fileName++;
 	sourceFile[sourceFiles] = new char[strlen( fileName ) + 1];
-	strcpy( sourceFile[sourceFiles], fileName ); 
+	strcpy( sourceFile[sourceFiles], fileName );
 	*marker = 0;
 	// load source file
 	FILE* f = fopen( file, "r" );
-	if (!f) FatalError( file, "loadSource" );  
+	if (!f) FatalError( file, "loadSource" );
 	char line[8192];
 	int lineNr = 0, currentFile = sourceFiles++;
 	while (!feof( f ))
@@ -915,7 +915,7 @@ static char* loadSource( const char* file, size_t* size )
 			char* incText = loadSource( file, size );
 			source.append( incText );
 		}
-		else 
+		else
 		{
 			source.append( line );
 			source.append( "\n" );
@@ -933,7 +933,7 @@ void Buffer::Write( void* dst )
 {
 	unsigned char* data = (unsigned char*)clEnqueueMapBuffer( Kernel::GetQueue(), pinnedBuffer, CL_TRUE, CL_MAP_WRITE, 0, 4 * size, 0, NULL, NULL, NULL );
 	memcpy( data, dst, size * 4 );
-	clEnqueueWriteBuffer( Kernel::GetQueue(), deviceBuffer, CL_FALSE, 0, 4 * size, data, 0, NULL, NULL);
+	clEnqueueWriteBuffer( Kernel::GetQueue(), deviceBuffer, CL_FALSE, 0, 4 * size, data, 0, NULL, NULL );
 }
 
 // Read
@@ -956,9 +956,9 @@ Buffer::Buffer( unsigned int N, unsigned int t, void* ptr )
 		size = N;
 		textureID = 0; // not representing a texture
 		deviceBuffer = clCreateBuffer( Kernel::GetContext(), CL_MEM_READ_WRITE, size * 4, 0, 0 );
-		if (!ptr) 
+		if (!ptr)
 		{
-			hostBuffer = new unsigned int[size]; 
+			hostBuffer = new unsigned int[size];
 			ownData = true;
 		}
 		else hostBuffer = (unsigned int*)ptr;
@@ -972,7 +972,7 @@ Buffer::Buffer( unsigned int N, unsigned int t, void* ptr )
 			deviceBuffer = clCreateFromGLTexture2D( Kernel::GetContext(), CL_MEM_READ_WRITE, GL_TEXTURE_2D, 0, N, 0 );
 		#else
 			if (t == TARGET) deviceBuffer = clCreateFromGLTexture( Kernel::GetContext(), CL_MEM_WRITE_ONLY, GL_TEXTURE_2D, 0, N, 0 );
-						else deviceBuffer = clCreateFromGLTexture( Kernel::GetContext(), CL_MEM_READ_ONLY, GL_TEXTURE_2D, 0, N, 0 );
+			else deviceBuffer = clCreateFromGLTexture( Kernel::GetContext(), CL_MEM_READ_ONLY, GL_TEXTURE_2D, 0, N, 0 );
 		#endif
 			hostBuffer = 0;
 		}
@@ -997,7 +997,7 @@ Buffer::Buffer( unsigned int N, unsigned int t, void* ptr )
 			format.image_channel_order = CL_RGBA;
 			format.image_channel_data_type = CL_FLOAT;
 			if (t == TARGET) deviceBuffer = clCreateImage( Kernel::GetContext(), CL_MEM_WRITE_ONLY, &format, &desc, hostBuffer, 0 );
-						else deviceBuffer = clCreateImage( Kernel::GetContext(), CL_MEM_READ_WRITE, &format, &desc, hostBuffer, 0 );
+			else deviceBuffer = clCreateImage( Kernel::GetContext(), CL_MEM_READ_WRITE, &format, &desc, hostBuffer, 0 );
 		}
 	}
 }
@@ -1055,29 +1055,29 @@ Kernel::Kernel( char* file, char* entryPoint )
 		if (!InitCL()) FATALERROR( "Failed to initialize OpenCL" );
 		clinitialized = true;
 	}
-    size_t size;
+	size_t size;
 	cl_int error;
 	char* source = loadSource( file, &size );
-    program = clCreateProgramWithSource( context, 1, (const char**)&source, &size, &error );
+	program = clCreateProgramWithSource( context, 1, (const char**)&source, &size, &error );
 	CHECKCL( error );
-    error = clBuildProgram( program, 0, NULL, "-cl-fast-relaxed-math -cl-mad-enable -cl-denorms-are-zero -cl-no-signed-zeros -cl-unsafe-math-optimizations -cl-finite-math-only", NULL, NULL );
-    if (error != CL_SUCCESS)
-    {
-	    if (!log) log = new char[100 * 1024]; // can be quite large
+	error = clBuildProgram( program, 0, NULL, "-cl-fast-relaxed-math -cl-mad-enable -cl-denorms-are-zero -cl-no-signed-zeros -cl-unsafe-math-optimizations -cl-finite-math-only", NULL, NULL );
+	if (error != CL_SUCCESS)
+	{
+		if (!log) log = new char[100 * 1024]; // can be quite large
 		log[0] = 0;
 		clGetProgramBuildInfo( program, getFirstDevice( context ), CL_PROGRAM_BUILD_LOG, 100 * 1024, log, NULL );
 		log[2048] = 0; // truncate very long logs
 		FatalError( log, "Build error" );
-    }
-    kernel = clCreateKernel( program, entryPoint, &error );
-    CHECKCL( error );
+	}
+	kernel = clCreateKernel( program, entryPoint, &error );
+	CHECKCL( error );
 }
 
 // Kernel destructor
 // ----------------------------------------------------------------------------
 Kernel::~Kernel()
 {
-	if (kernel) clReleaseKernel( kernel ); 
+	if (kernel) clReleaseKernel( kernel );
 	if (program) clReleaseProgram( program );
 }
 
@@ -1096,11 +1096,11 @@ bool Kernel::InitCL()
 	unsigned int deviceUsed = 0;
 	unsigned int endDev = devCount - 1;
 	bool canShare = false;
-	for( unsigned int i = deviceUsed; (!canShare && (i <= endDev)); ++i ) 
+	for (unsigned int i = deviceUsed; (!canShare && (i <= endDev)); ++i)
 	{
 		size_t extensionSize;
 		CHECKCL( error = clGetDeviceInfo( devices[i], CL_DEVICE_EXTENSIONS, 0, NULL, &extensionSize ) );
-		if (extensionSize > 0) 
+		if (extensionSize > 0)
 		{
 			char* extensions = (char*)malloc( extensionSize );
 			CHECKCL( error = clGetDeviceInfo( devices[i], CL_DEVICE_EXTENSIONS, extensionSize, extensions, &extensionSize ) );
@@ -1110,30 +1110,29 @@ bool Kernel::InitCL()
 			size_t spacePos = devices.find( ' ', oldPos ); // extensions string is space delimited
 			while (spacePos != devices.npos)
 			{
-				if (strcmp( "cl_khr_gl_sharing", devices.substr( oldPos, spacePos - oldPos ).c_str() ) == 0 ) 
+				if (strcmp( "cl_khr_gl_sharing", devices.substr( oldPos, spacePos - oldPos ).c_str() ) == 0)
 				{
 					canShare = true; // device supports context sharing with OpenGL
 					deviceUsed = i;
 					break;
 				}
-				do 
+				do
 				{
 					oldPos = spacePos + 1;
-					spacePos = devices.find(' ', oldPos);
-				} 
-				while (spacePos == oldPos);
+					spacePos = devices.find( ' ', oldPos );
+				} while (spacePos == oldPos);
 			}
 		}
 	}
-	if (canShare) printf( "Using CL-GL Interop\n" ); else 
+	if (canShare) printf( "Using CL-GL Interop\n" ); else
 	{
-		printf( "No device found that supports CL/GL context sharing\n" );  
+		printf( "No device found that supports CL/GL context sharing\n" );
 		return false;
 	}
-	cl_context_properties props[] = 
+	cl_context_properties props[] =
 	{
-		CL_GL_CONTEXT_KHR, (cl_context_properties)wglGetCurrentContext(), 
-		CL_WGL_HDC_KHR, (cl_context_properties)wglGetCurrentDC(), 
+		CL_GL_CONTEXT_KHR, (cl_context_properties)wglGetCurrentContext(),
+		CL_WGL_HDC_KHR, (cl_context_properties)wglGetCurrentDC(),
 		CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0
 	};
 	// attempt to create a context with the requested features
@@ -1269,7 +1268,7 @@ void Kernel::Run( const size_t count )
 		https://glad.dav1d.de/#profile=compatibility&language=c&specification=gl&loader=on&api=gl%3D4.6&extensions=GL_EXT_memory_object&extensions=GL_EXT_memory_object_fd&extensions=GL_EXT_memory_object_win32
 */
 
-static void *get_proc( const char *namez );
+static void* get_proc( const char* namez );
 
 #if defined( _WIN32 ) || defined( __CYGWIN__ )
 #ifndef _WINDOWS_
@@ -1277,7 +1276,7 @@ static void *get_proc( const char *namez );
 #endif
 static HMODULE libGL;
 
-typedef void *(APIENTRYP PFNWGLGETPROCADDRESSPROC_PRIVATE)(const char *);
+typedef void* (APIENTRYP PFNWGLGETPROCADDRESSPROC_PRIVATE)(const char*);
 static PFNWGLGETPROCADDRESSPROC_PRIVATE gladGetProcAddressPtr;
 
 #ifdef _MSC_VER
@@ -1305,8 +1304,8 @@ static int open_gl( void )
 	libGL = LoadLibraryW( L"opengl32.dll" );
 	if (libGL != NULL)
 	{
-		void( *tmp )(void);
-		tmp = (void( *)(void))GetProcAddress( libGL, "wglGetProcAddress" );
+		void(*tmp)(void);
+		tmp = (void(*)(void))GetProcAddress( libGL, "wglGetProcAddress" );
 		gladGetProcAddressPtr = (PFNWGLGETPROCADDRESSPROC_PRIVATE)tmp;
 		return gladGetProcAddressPtr != NULL;
 	}
@@ -1325,23 +1324,23 @@ static void close_gl( void )
 }
 #else
 #include <dlfcn.h>
-static void *libGL;
+static void* libGL;
 
 #if !defined( __APPLE__ ) && !defined( __HAIKU__ )
-typedef void *(APIENTRYP PFNGLXGETPROCADDRESSPROC_PRIVATE)(const char *);
+typedef void* (APIENTRYP PFNGLXGETPROCADDRESSPROC_PRIVATE)(const char*);
 static PFNGLXGETPROCADDRESSPROC_PRIVATE gladGetProcAddressPtr;
 #endif
 
 static int open_gl( void )
 {
 #ifdef __APPLE__
-	static const char *NAMES[] = {
+	static const char* NAMES[] = {
 		"../Frameworks/OpenGL.framework/OpenGL",
 		"/Library/Frameworks/OpenGL.framework/OpenGL",
 		"/System/Library/Frameworks/OpenGL.framework/OpenGL",
 		"/System/Library/Frameworks/OpenGL.framework/Versions/Current/OpenGL" };
 #else
-	static const char *NAMES[] = { "libGL.so.1", "libGL.so" };
+	static const char* NAMES[] = { "libGL.so.1", "libGL.so" };
 #endif
 
 	unsigned int index = 0;
@@ -1374,9 +1373,9 @@ static void close_gl( void )
 }
 #endif
 
-static void *get_proc( const char *namez )
+static void* get_proc( const char* namez )
 {
-	void *result = NULL;
+	void* result = NULL;
 	if (libGL == NULL) return NULL;
 
 #if !defined( __APPLE__ ) && !defined( __HAIKU__ )
@@ -1388,7 +1387,7 @@ static void *get_proc( const char *namez )
 	if (result == NULL)
 	{
 	#if defined( _WIN32 ) || defined( __CYGWIN__ )
-		result = (void *)GetProcAddress( (HMODULE)libGL, namez );
+		result = (void*)GetProcAddress( (HMODULE)libGL, namez );
 	#else
 		result = dlsym( libGL, namez );
 	#endif
@@ -1419,9 +1418,9 @@ struct gladGLversionStruct GLVersion = { 0, 0 };
 static int max_loaded_major;
 static int max_loaded_minor;
 
-static const char *exts = NULL;
+static const char* exts = NULL;
 static int num_exts_i = 0;
-static char **exts_i = NULL;
+static char** exts_i = NULL;
 
 static int get_exts( void )
 {
@@ -1429,7 +1428,7 @@ static int get_exts( void )
 	if (max_loaded_major < 3)
 	{
 	#endif
-		exts = (const char *)glGetString( GL_EXTENSIONS );
+		exts = (const char*)glGetString( GL_EXTENSIONS );
 	#ifdef _GLAD_IS_SOME_NEW_VERSION
 	}
 	else
@@ -1440,7 +1439,7 @@ static int get_exts( void )
 		glGetIntegerv( GL_NUM_EXTENSIONS, &num_exts_i );
 		if (num_exts_i > 0)
 		{
-			exts_i = (char **)malloc( (size_t)num_exts_i * (sizeof *exts_i) );
+			exts_i = (char**)malloc( (size_t)num_exts_i * (sizeof * exts_i) );
 		}
 
 		if (exts_i == NULL)
@@ -1450,10 +1449,10 @@ static int get_exts( void )
 
 		for (index = 0; index < (unsigned)num_exts_i; index++)
 		{
-			const char *gl_str_tmp = (const char *)glGetStringi( GL_EXTENSIONS, index );
+			const char* gl_str_tmp = (const char*)glGetStringi( GL_EXTENSIONS, index );
 			size_t len = strlen( gl_str_tmp );
 
-			char *local_str = (char *)malloc( (len + 1) * sizeof( char ) );
+			char* local_str = (char*)malloc( (len + 1) * sizeof( char ) );
 			if (local_str != NULL)
 			{
 				memcpy( local_str, gl_str_tmp, (len + 1) * sizeof( char ) );
@@ -1472,22 +1471,22 @@ static void free_exts( void )
 		int index;
 		for (index = 0; index < num_exts_i; index++)
 		{
-			free( (char *)exts_i[index] );
+			free( (char*)exts_i[index] );
 		}
-		free( (void *)exts_i );
+		free( (void*)exts_i );
 		exts_i = NULL;
 	}
 }
 
-static int has_ext( const char *ext )
+static int has_ext( const char* ext )
 {
 #ifdef _GLAD_IS_SOME_NEW_VERSION
 	if (max_loaded_major < 3)
 	{
 	#endif
-		const char *extensions;
-		const char *loc;
-		const char *terminator;
+		const char* extensions;
+		const char* loc;
+		const char* terminator;
 		extensions = exts;
 		if (extensions == NULL || ext == NULL)
 		{
@@ -1518,7 +1517,7 @@ static int has_ext( const char *ext )
 		if (exts_i == NULL) return 0;
 		for (index = 0; index < num_exts_i; index++)
 		{
-			const char *e = exts_i[index];
+			const char* e = exts_i[index];
 
 			if (exts_i[index] != NULL && strcmp( e, ext ) == 0)
 			{
@@ -3804,14 +3803,14 @@ static void find_coreGL( void )
 	 */
 	int i, major, minor;
 
-	const char *version;
-	const char *prefixes[] = {
+	const char* version;
+	const char* prefixes[] = {
 		"OpenGL ES-CM ",
 		"OpenGL ES-CL ",
 		"OpenGL ES ",
 		NULL };
 
-	version = (const char *)glGetString( GL_VERSION );
+	version = (const char*)glGetString( GL_VERSION );
 	if (!version) return;
 
 	for (i = 0; prefixes[i]; i++)
