@@ -37,8 +37,8 @@ void Game::Tick( float deltaTime )
 	screen->Print( "hello world", 2, 2, 0xffffff );
 	// test colors
 	screen->Bar( 50, 200, 100, 250, 0xff0000 ); // red
-	screen->Bar( 125, 200, 175, 250, 0x00ff00 ); // red
-	screen->Bar( 200, 200, 250, 250, 0x0000ff ); // red
+	screen->Bar( 125, 200, 175, 250, 0x00ff00 ); // green
+	screen->Bar( 200, 200, 250, 250, 0x0000ff ); // blue
 	// draw a sprite
 	rotatingGun.SetFrame( frame );
 	rotatingGun.Draw( screen, 100, 100 );
