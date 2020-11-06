@@ -121,7 +121,7 @@ void main()
 	// shader
 	Shader* shader = new Shader(
 		"#version 330\nlayout (location=0) in vec4 pos;\nlayout (location=1) in vec2 tuv;\nout vec2 uv;\nvoid main(){uv = tuv;gl_Position = pos;}",
-		"#version 330\nuniform sampler2D c;\nin vec2 uv;\nout vec3 p;\nvoid main(){p=texture(c,uv).xyz;}", true
+		"#version 330\nuniform sampler2D c;\nin vec2 uv;\nout vec3 p;\nvoid main(){p=texture(c,uv).zyx;}", true
 	);
 	// done, enter main loop
 	Timer timer;
