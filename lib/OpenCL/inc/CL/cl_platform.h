@@ -1,5 +1,5 @@
 /**********************************************************************************
- * Copyright (c) 2008-2012 The Khronos Group Inc.
+ * Copyright (c) 2008-2013 The Khronos Group Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and/or associated documentation files (the
@@ -21,7 +21,7 @@
  * MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
  **********************************************************************************/
 
-/* $Revision: 11803 $ on $Date: 2010-06-25 10:02:12 -0700 (Fri, 25 Jun 2010) $ */
+/* $Revision: 14829 $ on $Date: 2011-05-26 08:22:50 -0700 (Thu, 26 May 2011) $ */
 
 #ifndef __CL_PLATFORM_H
 #define __CL_PLATFORM_H
@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__CYGWIN__)
     #define CL_API_ENTRY
     #define CL_API_CALL     __stdcall
     #define CL_CALLBACK     __stdcall
@@ -75,6 +75,8 @@ extern "C" {
     #define CL_EXT_SUFFIX__VERSION_1_1
     #define CL_API_SUFFIX__VERSION_1_2
     #define CL_EXT_SUFFIX__VERSION_1_2
+    #define CL_API_SUFFIX__VERSION_2_0
+    #define CL_EXT_SUFFIX__VERSION_2_0
     
     #ifdef __GNUC__
         #ifdef CL_USE_DEPRECATED_OPENCL_1_0_APIS
@@ -92,9 +94,17 @@ extern "C" {
             #define CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED __attribute__((deprecated))
             #define CL_EXT_PREFIX__VERSION_1_1_DEPRECATED    
         #endif
+
+        #ifdef CL_USE_DEPRECATED_OPENCL_2_0_APIS
+            #define CL_EXT_SUFFIX__VERSION_2_0_DEPRECATED
+            #define CL_EXT_PREFIX__VERSION_2_0_DEPRECATED
+        #else
+            #define CL_EXT_SUFFIX__VERSION_2_0_DEPRECATED __attribute__((deprecated))
+            #define CL_EXT_PREFIX__VERSION_2_0_DEPRECATED
+         #endif
     #elif _WIN32
         #ifdef CL_USE_DEPRECATED_OPENCL_1_0_APIS
-            #define CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED    
+            #define CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED
             #define CL_EXT_PREFIX__VERSION_1_0_DEPRECATED    
         #else
             #define CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED 
@@ -108,12 +118,23 @@ extern "C" {
             #define CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED 
             #define CL_EXT_PREFIX__VERSION_1_1_DEPRECATED __declspec(deprecated)     
         #endif
+    
+        #ifdef CL_USE_DEPRECATED_OPENCL_2_0_APIS
+            #define CL_EXT_SUFFIX__VERSION_2_0_DEPRECATED
+            #define CL_EXT_PREFIX__VERSION_2_0_DEPRECATED
+        #else
+            #define CL_EXT_SUFFIX__VERSION_2_0_DEPRECATED
+            #define CL_EXT_PREFIX__VERSION_2_0_DEPRECATED __declspec(deprecated)
+        #endif
     #else
         #define CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED
         #define CL_EXT_PREFIX__VERSION_1_0_DEPRECATED
     
         #define CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
         #define CL_EXT_PREFIX__VERSION_1_1_DEPRECATED
+    
+        #define CL_EXT_SUFFIX__VERSION_2_0_DEPRECATED
+        #define CL_EXT_PREFIX__VERSION_2_0_DEPRECATED
     #endif
 #endif
 
@@ -159,7 +180,7 @@ typedef double                  cl_double;
 #define CL_FLT_RADIX        2
 #define CL_FLT_MAX          340282346638528859811704183484516925440.0f
 #define CL_FLT_MIN          1.175494350822287507969e-38f
-#define CL_FLT_EPSILON      0x1.0p-23f
+#define CL_FLT_EPSILON      0.00000011920928955078125f
 
 #define CL_DBL_DIG          15
 #define CL_DBL_MANT_DIG     53
@@ -354,7 +375,7 @@ typedef unsigned int cl_GLenum;
     #else
         #include <xmmintrin.h>
     #endif
-    #if defined( __GNUC__ )
+    #if defined( __GNUC__ ) && !defined( __ICC )
         typedef float __cl_float4   __attribute__((vector_size(16)));
     #else
         typedef __m128 __cl_float4;
@@ -368,7 +389,7 @@ typedef unsigned int cl_GLenum;
     #else
         #include <emmintrin.h>
     #endif
-    #if defined( __GNUC__ )
+    #if defined( __GNUC__ ) && !defined( __ICC )
         typedef cl_uchar    __cl_uchar16    __attribute__((vector_size(16)));
         typedef cl_char     __cl_char16     __attribute__((vector_size(16)));
         typedef cl_ushort   __cl_ushort8    __attribute__((vector_size(16)));
@@ -402,7 +423,7 @@ typedef unsigned int cl_GLenum;
 
 #if defined( __MMX__ )
     #include <mmintrin.h>
-    #if defined( __GNUC__ )
+    #if defined( __GNUC__ ) && !defined( __ICC )
         typedef cl_uchar    __cl_uchar8     __attribute__((vector_size(8)));
         typedef cl_char     __cl_char8      __attribute__((vector_size(8)));
         typedef cl_ushort   __cl_ushort4    __attribute__((vector_size(8)));
@@ -440,7 +461,7 @@ typedef unsigned int cl_GLenum;
     #else
         #include <immintrin.h> 
     #endif
-    #if defined( __GNUC__ )
+    #if defined( __GNUC__ ) && !defined( __ICC )
         typedef cl_float    __cl_float8     __attribute__((vector_size(32)));
         typedef cl_double   __cl_double4    __attribute__((vector_size(32)));
     #else
@@ -452,7 +473,7 @@ typedef unsigned int cl_GLenum;
 #endif
 
 /* Define capabilities for anonymous struct members. */
-#if defined( __GNUC__) && ! defined( __STRICT_ANSI__ )
+#if (defined( __GNUC__ )  ||  defined( __IBMC__ )) && ! defined( __STRICT_ANSI__ )
 #define  __CL_HAS_ANON_STRUCT__ 1
 #define  __CL_ANON_STRUCT__ __extension__
 #elif defined( _WIN32) && (_MSC_VER >= 1500)
@@ -470,7 +491,7 @@ typedef unsigned int cl_GLenum;
 #endif
 
 /* Define alignment keys */
-#if defined( __GNUC__ )
+#if (defined( __GNUC__ ) || defined( __IBMC__ ))
     #define CL_ALIGNED(_x)          __attribute__ ((aligned(_x)))
 #elif defined( _WIN32) && (_MSC_VER)
     /* Alignment keys neutered on windows because MSVC can't swallow function arguments with alignment requirements     */

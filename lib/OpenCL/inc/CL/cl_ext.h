@@ -21,7 +21,7 @@
  * MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
  ******************************************************************************/
 
-/* $Revision: 11928 $ on $Date: 2010-07-13 09:04:56 -0700 (Tue, 13 Jul 2010) $ */
+/* $Revision: 14835 $ on $Date: 2011-05-26 11:32:00 -0700 (Thu, 26 May 2011) $ */
 
 /* cl_ext.h contains OpenCL extensions which don't have external */
 /* (OpenGL, D3D) dependencies.                                   */
@@ -134,21 +134,20 @@ typedef CL_API_ENTRY cl_int (CL_API_CALL *clIcdGetPlatformIDsKHR_fn)(
  * cl_khr_initalize_memory extension *
  *************************************/
     
-#define CL_CONTEXT_MEMORY_INITIALIZE_KHR            0x200E
+#define CL_CONTEXT_MEMORY_INITIALIZE_KHR            0x2030
     
     
 /**************************************
  * cl_khr_terminate_context extension *
  **************************************/
     
-#define CL_DEVICE_TERMINATE_CAPABILITY_KHR          0x200F
-#define CL_CONTEXT_TERMINATE_KHR                    0x2010
+#define CL_DEVICE_TERMINATE_CAPABILITY_KHR          0x2031
+#define CL_CONTEXT_TERMINATE_KHR                    0x2032
 
 #define cl_khr_terminate_context 1
 extern CL_API_ENTRY cl_int CL_API_CALL clTerminateContextKHR(cl_context /* context */) CL_EXT_SUFFIX__VERSION_1_2;
 
 typedef CL_API_ENTRY cl_int (CL_API_CALL *clTerminateContextKHR_fn)(cl_context /* context */) CL_EXT_SUFFIX__VERSION_1_2;
-    
     
 /*
  * Extension: cl_khr_spir
@@ -172,15 +171,56 @@ typedef CL_API_ENTRY cl_int (CL_API_CALL *clTerminateContextKHR_fn)(cl_context /
 #define CL_DEVICE_GPU_OVERLAP_NV                    0x4004
 #define CL_DEVICE_KERNEL_EXEC_TIMEOUT_NV            0x4005
 #define CL_DEVICE_INTEGRATED_MEMORY_NV              0x4006
-#define CL_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT_NV   0x4007
-#define CL_DEVICE_PCI_BUS_ID_NV                     0x4008
-#define CL_DEVICE_PCI_SLOT_ID_NV                    0x4009
 
+/*********************************
+* cl_amd_device_memory_flags *
+*********************************/
+#define cl_amd_device_memory_flags 1
+#define CL_MEM_USE_PERSISTENT_MEM_AMD       (1 << 6)        // Alloc from GPU's CPU visible heap
+
+/* cl_device_info */
+#define CL_DEVICE_MAX_ATOMIC_COUNTERS_EXT           0x4032
 
 /*********************************
 * cl_amd_device_attribute_query *
 *********************************/
 #define CL_DEVICE_PROFILING_TIMER_OFFSET_AMD        0x4036
+#define CL_DEVICE_TOPOLOGY_AMD                      0x4037
+#define CL_DEVICE_BOARD_NAME_AMD                    0x4038
+#define CL_DEVICE_GLOBAL_FREE_MEMORY_AMD            0x4039
+#define CL_DEVICE_SIMD_PER_COMPUTE_UNIT_AMD         0x4040
+#define CL_DEVICE_SIMD_WIDTH_AMD                    0x4041
+#define CL_DEVICE_SIMD_INSTRUCTION_WIDTH_AMD        0x4042
+#define CL_DEVICE_WAVEFRONT_WIDTH_AMD               0x4043
+#define CL_DEVICE_GLOBAL_MEM_CHANNELS_AMD           0x4044
+#define CL_DEVICE_GLOBAL_MEM_CHANNEL_BANKS_AMD      0x4045
+#define CL_DEVICE_GLOBAL_MEM_CHANNEL_BANK_WIDTH_AMD 0x4046
+#define CL_DEVICE_LOCAL_MEM_SIZE_PER_COMPUTE_UNIT_AMD   0x4047
+#define CL_DEVICE_LOCAL_MEM_BANKS_AMD               0x4048
+#define CL_DEVICE_THREAD_TRACE_SUPPORTED_AMD        0x4049
+#define CL_DEVICE_GFXIP_MAJOR_AMD                   0x404A
+#define CL_DEVICE_GFXIP_MINOR_AMD                   0x404B
+#define CL_DEVICE_AVAILABLE_ASYNC_QUEUES_AMD        0x404C
+
+typedef union
+{
+    struct { cl_uint type; cl_uint data[5]; } raw;
+    struct { cl_uint type; cl_char unused[17]; cl_char bus; cl_char device; cl_char function; } pcie;
+} cl_device_topology_amd;
+
+#define CL_DEVICE_TOPOLOGY_TYPE_PCIE_AMD            1
+
+/*************
+* cl_amd_hsa *
+**************/
+#define CL_HSA_ENABLED_AMD                          (1ull << 62)
+#define CL_HSA_DISABLED_AMD                         (1ull << 63)
+
+
+/**************************
+* cl_amd_offline_devices *
+**************************/
+#define CL_CONTEXT_OFFLINE_DEVICES_AMD              0x403F
 
 /*********************************
 * cl_arm_printf extension
@@ -234,6 +274,9 @@ typedef CL_API_ENTRY cl_int (CL_API_CALL *clTerminateContextKHR_fn)(cl_context /
     #define CL_DEVICE_REFERENCE_COUNT_EXT               0x4057
     #define CL_DEVICE_PARTITION_STYLE_EXT               0x4058
     
+    /* clGetImageInfo enum */
+    #define CL_IMAGE_BYTE_PITCH_AMD                     0x4059
+
     /* error codes */
     #define CL_DEVICE_PARTITION_FAILED_EXT              -1057
     #define CL_INVALID_PARTITION_COUNT_EXT              -1058
@@ -246,7 +289,6 @@ typedef CL_API_ENTRY cl_int (CL_API_CALL *clTerminateContextKHR_fn)(cl_context /
     #define CL_AFFINITY_DOMAIN_L4_CACHE_EXT             0x4
     #define CL_AFFINITY_DOMAIN_NUMA_EXT                 0x10
     #define CL_AFFINITY_DOMAIN_NEXT_FISSIONABLE_EXT     0x100
-    
     /* cl_device_partition_property_ext list terminators */
     #define CL_PROPERTIES_LIST_END_EXT                  ((cl_device_partition_property_ext) 0)
     #define CL_PARTITION_BY_COUNTS_LIST_END_EXT         ((cl_device_partition_property_ext) 0)
@@ -285,7 +327,7 @@ typedef struct _cl_mem_ext_host_ptr
     /* Legal values will be defined in layered extensions. */
     cl_uint  allocation_type;
             
-	/* Host cache policy for this external memory allocation. */
+    /* Host cache policy for this external memory allocation. */
     cl_uint  host_cache_policy;
 
 } cl_mem_ext_host_ptr;
@@ -310,7 +352,88 @@ typedef struct _cl_mem_ion_host_ptr
 
 } cl_mem_ion_host_ptr;
 
+
 #endif /* CL_VERSION_1_1 */
+
+#ifdef CL_VERSION_1_2
+/********************************
+* cl_amd_bus_addressable_memory *
+********************************/
+
+/* cl_mem flag - bitfield */
+#define CL_MEM_BUS_ADDRESSABLE_AMD               (1<<30)
+#define CL_MEM_EXTERNAL_PHYSICAL_AMD             (1<<31)
+
+#define CL_COMMAND_WAIT_SIGNAL_AMD                0x4080
+#define CL_COMMAND_WRITE_SIGNAL_AMD               0x4081
+#define CL_COMMAND_MAKE_BUFFERS_RESIDENT_AMD      0x4082
+
+typedef struct _cl_bus_address_amd
+{
+    cl_ulong surface_bus_address;
+    cl_ulong marker_bus_address;
+} cl_bus_address_amd;
+
+typedef CL_API_ENTRY cl_int
+(CL_API_CALL * clEnqueueWaitSignalAMD_fn)( cl_command_queue /*command_queue*/,
+                                           cl_mem /*mem_object*/,
+                                           cl_uint /*value*/,
+                                           cl_uint /*num_events*/,
+                                           const cl_event * /*event_wait_list*/,
+                                           cl_event * /*event*/) CL_EXT_SUFFIX__VERSION_1_2;
+
+typedef CL_API_ENTRY cl_int
+(CL_API_CALL * clEnqueueWriteSignalAMD_fn)( cl_command_queue /*command_queue*/,
+                                            cl_mem /*mem_object*/,
+                                            cl_uint /*value*/,
+                                            cl_ulong /*offset*/,
+                                            cl_uint /*num_events*/,
+                                            const cl_event * /*event_list*/,
+                                            cl_event * /*event*/) CL_EXT_SUFFIX__VERSION_1_2;
+
+typedef CL_API_ENTRY cl_int
+(CL_API_CALL * clEnqueueMakeBuffersResidentAMD_fn)( cl_command_queue /*command_queue*/,
+                                                    cl_uint /*num_mem_objs*/,
+                                                    cl_mem * /*mem_objects*/,
+                                                    cl_bool /*blocking_make_resident*/,
+                                                    cl_bus_address_amd * /*bus_addresses*/,
+                                                    cl_uint /*num_events*/,
+                                                    const cl_event * /*event_list*/,
+                                                    cl_event * /*event*/) CL_EXT_SUFFIX__VERSION_1_2;
+#endif /* CL_VERSION_1_2 */
+
+#ifdef CL_VERSION_2_0
+/*********************************
+* cl_khr_sub_groups extension
+*********************************/
+#define cl_khr_sub_groups 1
+
+typedef cl_uint  cl_kernel_sub_group_info;
+
+/* cl_khr_sub_group_info */
+#define CL_KERNEL_MAX_SUB_GROUP_SIZE_FOR_NDRANGE_KHR	0x2033
+#define CL_KERNEL_SUB_GROUP_COUNT_FOR_NDRANGE_KHR		0x2034
+
+extern CL_API_ENTRY cl_int CL_API_CALL
+clGetKernelSubGroupInfoKHR(cl_kernel /* in_kernel */,
+						   cl_device_id /*in_device*/,
+						   cl_kernel_sub_group_info /* param_name */,
+						   size_t /*input_value_size*/,
+						   const void * /*input_value*/,
+						   size_t /*param_value_size*/,
+						   void* /*param_value*/,
+						   size_t* /*param_value_size_ret*/ ) CL_EXT_SUFFIX__VERSION_2_0;
+						   
+typedef CL_API_ENTRY cl_int
+     ( CL_API_CALL * clGetKernelSubGroupInfoKHR_fn)(cl_kernel /* in_kernel */,
+						      cl_device_id /*in_device*/,
+						      cl_kernel_sub_group_info /* param_name */,
+						      size_t /*input_value_size*/,
+						      const void * /*input_value*/,
+						      size_t /*param_value_size*/,
+						      void* /*param_value*/,
+						      size_t* /*param_value_size_ret*/ ) CL_EXT_SUFFIX__VERSION_2_0;
+#endif /* CL_VERSION_2_0 */
 
 #ifdef __cplusplus
 }

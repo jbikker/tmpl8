@@ -23,3 +23,4 @@ rd x64\release /S /Q
 del x64\*.exe
 del x64\*.ilk
 del x64\*.pdb
+del buildlog.txt

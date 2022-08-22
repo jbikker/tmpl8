@@ -1,46 +1,41 @@
-#include "precomp.h" // include (only) this in every .cpp file
+#include "precomp.h"
+#include "game.h"
 
-void Game::Dummy()
-{
-	printf( "Task A\n" );	
-}
+TheApp* CreateApp() { return new Game(); }
 
 // -----------------------------------------------------------
 // Initialize the application
 // -----------------------------------------------------------
 void Game::Init()
 {
-	AddTask( [&](){ this->Dummy(); } );
-	AddTask( [](){} );
-	RunTasks();
-	WaitForAll();
+	// anything that happens only once at application start goes here
 }
 
 // -----------------------------------------------------------
-// Close down application
-// -----------------------------------------------------------
-void Game::Shutdown()
-{
-}
-
-static Sprite rotatingGun( new Surface( "assets/aagun.tga" ), 36 );
-static int frame = 0;
-
-// -----------------------------------------------------------
-// Main application tick function
+// Main application tick function - Executed once per frame
 // -----------------------------------------------------------
 void Game::Tick( float deltaTime )
 {
-	// clear the graphics window
+	// NOTE: clear this function before actual use; code is only for 
+	// demonstration purposes. See _ getting started.pdf for details.
+
+	// clear the screen to black
 	screen->Clear( 0 );
-	// print something in the graphics window
-	screen->Print( "hello world", 2, 2, 0xffffff );
-	// test colors
-	screen->Bar( 50, 200, 100, 250, 0xff0000 ); // red
-	screen->Bar( 125, 200, 175, 250, 0x00ff00 ); // green
-	screen->Bar( 200, 200, 250, 250, 0x0000ff ); // blue
+	// print something to the console window
+	printf( "hello world!\n" );
+	// plot some colors
+	for (int red = 0; red < 256; red++) for (int green = 0; green < 256; green++)
+	{
+		int x = red, y = green;
+		screen->Plot( x + 200, y + 100, (red << 16) + (green << 8) );
+	}
+	// plot a white pixel in the bottom right corner
+	screen->Plot( SCRWIDTH - 2, SCRHEIGHT - 2, 0xffffff );
 	// draw a sprite
+	static Sprite rotatingGun( new Surface( "assets/aagun.tga" ), 36 );
+	static int frame = 0;
 	rotatingGun.SetFrame( frame );
 	rotatingGun.Draw( screen, 100, 100 );
 	if (++frame == 36) frame = 0;
+	Sleep( 50 ); // otherwise it will be too fast!
 }
