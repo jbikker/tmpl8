@@ -37,9 +37,6 @@ static TheApp* app = 0;
 // static member data for instruction set support class
 static const CPUCaps cpucaps;
 
-// find the app implementation
-TheApp* CreateApp();
-
 // provide access to the render target, for OpenCL / OpenGL interop
 GLTexture* GetRenderTarget() { return renderTarget; }
 
@@ -131,7 +128,7 @@ void main()
 	// initialize application
 	InitRenderTarget( SCRWIDTH, SCRHEIGHT );
 	Surface* screen = new Surface( SCRWIDTH, SCRHEIGHT );
-	app = CreateApp();
+	app = new Game();
 	app->screen = screen;
 	app->Init();
 	// done, enter main loop

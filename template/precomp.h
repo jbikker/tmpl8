@@ -1553,4 +1553,6 @@ public:
 	Surface* screen = 0;
 };
 
+#include "game.h"
+
 // EOF

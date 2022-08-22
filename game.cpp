@@ -1,7 +1,4 @@
 #include "precomp.h"
-#include "game.h"
-
-TheApp* CreateApp() { return new Game(); }
 
 // -----------------------------------------------------------
 // Initialize the application
