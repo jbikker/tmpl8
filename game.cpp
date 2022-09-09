@@ -28,7 +28,7 @@ void Game::Tick( float deltaTime )
 	}
 	// plot a white pixel in the bottom right corner
 	screen->Plot( SCRWIDTH - 2, SCRHEIGHT - 2, 0xffffff );
-	// draw a sprite
+	//  draw a sprite
 	static Sprite rotatingGun( new Surface( "assets/aagun.tga" ), 36 );
 	static int frame = 0;
 	rotatingGun.SetFrame( frame );
