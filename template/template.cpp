@@ -1610,6 +1610,12 @@ void Surface::Box( int x1, int y1, int x2, int y2, uint c )
 
 void Surface::Bar( int x1, int y1, int x2, int y2, uint c )
 {
+	// clipping
+	if (x1 < 0) x1 = 0;
+	if (x2 >= width) x2 = width - 1;
+	if (y1 < 0) y1 = 0;
+	if (y2 >= height) y2 = width - 1;
+	// draw clipped bar
 	uint* a = x1 + y1 * width + pixels;
 	for (int y = y1; y <= y2; y++)
 	{
