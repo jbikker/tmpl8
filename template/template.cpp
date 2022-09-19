@@ -1805,14 +1805,14 @@ void Sprite::Draw( Surface* a_Target, int a_X, int a_Y )
 	if ((x2 > x1) && (y2 > y1))
 	{
 		unsigned int addr = y1 * dpitch + x1;
-		const int width = x2 - x1;
-		const int height = y2 - y1;
-		for (int y = 0; y < height; y++)
+		const int w = x2 - x1;
+		const int h = y2 - y1;
+		for (int y = 0; y < h; y++)
 		{
 			const int line = y + (y1 - a_Y);
 			const int lsx = start[currentFrame][line] + a_X;
 			xs = (lsx > x1) ? lsx - x1 : 0;
-			for (int x = xs; x < width; x++)
+			for (int x = xs; x < w; x++)
 			{
 				const uint c1 = *(src + x);
 				if (c1 & 0xffffff) *(dest + addr + x) = c1;
