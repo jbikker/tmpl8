@@ -32,7 +32,10 @@ void Game::Tick( float deltaTime )
 	static Sprite rotatingGun( new Surface( "assets/aagun.tga" ), 36 );
 	static int frame = 0;
 	rotatingGun.SetFrame( frame );
-	rotatingGun.Draw( screen, 100, 100 );
+	rotatingGun.Draw( screen, SCRWIDTH - 20, 1 );
+	rotatingGun.Draw( screen, SCRWIDTH - 35, 50 );
+	rotatingGun.Draw( screen, SCRWIDTH - 50, 100 );
+	screen->Bar( SCRWIDTH - 50, 50, SCRWIDTH + 50, 300, 0xff0000 );
 	if (++frame == 36) frame = 0;
 	Sleep( 50 ); // otherwise it will be too fast!
 }

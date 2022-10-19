@@ -21,7 +21,7 @@
   <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>NotSet</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -122,6 +122,11 @@
   <!-- END Custom section -->
   <ItemGroup>
     <ClCompile Include="game.cpp" />
+    <ClCompile Include="tmplmath.cpp" />
+    <ClCompile Include="opencl.cpp" />
+    <ClCompile Include="opengl.cpp" />
+    <ClCompile Include="sprite.cpp" />
+    <ClCompile Include="surface.cpp" />
     <ClCompile Include="template\template.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">precomp.h</PrecompiledHeaderFile>
@@ -132,6 +137,11 @@
   <ItemGroup>
     <ClInclude Include="cl\tools.cl" />
     <ClInclude Include="game.h" />
+    <ClInclude Include="opencl.h" />
+    <ClInclude Include="opengl.h" />
+    <ClInclude Include="tmplmath.h" />
+    <ClInclude Include="sprite.h" />
+    <ClInclude Include="surface.h" />
     <ClInclude Include="template\common.h" />
     <ClInclude Include="template\precomp.h" />
   </ItemGroup>

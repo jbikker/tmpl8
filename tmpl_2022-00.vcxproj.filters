@@ -5,6 +5,21 @@
       <Filter>template</Filter>
     </ClCompile>
     <ClCompile Include="game.cpp" />
+    <ClCompile Include="surface.cpp">
+      <Filter>template</Filter>
+    </ClCompile>
+    <ClCompile Include="sprite.cpp">
+      <Filter>template</Filter>
+    </ClCompile>
+    <ClCompile Include="opencl.cpp">
+      <Filter>template</Filter>
+    </ClCompile>
+    <ClCompile Include="opengl.cpp">
+      <Filter>template</Filter>
+    </ClCompile>
+    <ClCompile Include="tmplmath.cpp">
+      <Filter>template</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="template\common.h">
@@ -16,6 +31,21 @@
     <ClInclude Include="game.h" />
     <ClInclude Include="cl\tools.cl">
       <Filter>template\cl</Filter>
+    </ClInclude>
+    <ClInclude Include="surface.h">
+      <Filter>template</Filter>
+    </ClInclude>
+    <ClInclude Include="sprite.h">
+      <Filter>template</Filter>
+    </ClInclude>
+    <ClInclude Include="tmplmath.h">
+      <Filter>template</Filter>
+    </ClInclude>
+    <ClInclude Include="opencl.h">
+      <Filter>template</Filter>
+    </ClInclude>
+    <ClInclude Include="opengl.h">
+      <Filter>template</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
