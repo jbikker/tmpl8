@@ -122,28 +122,28 @@
   <!-- END Custom section -->
   <ItemGroup>
     <ClCompile Include="game.cpp" />
-    <ClCompile Include="tmplmath.cpp" />
-    <ClCompile Include="opencl.cpp" />
-    <ClCompile Include="opengl.cpp" />
-    <ClCompile Include="sprite.cpp" />
-    <ClCompile Include="surface.cpp" />
+    <ClCompile Include="template\opencl.cpp" />
+    <ClCompile Include="template\opengl.cpp" />
+    <ClCompile Include="template\sprite.cpp" />
+    <ClCompile Include="template\surface.cpp" />
     <ClCompile Include="template\template.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">precomp.h</PrecompiledHeaderFile>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">precomp.h</PrecompiledHeaderFile>
     </ClCompile>
+    <ClCompile Include="template\tmplmath.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cl\tools.cl" />
     <ClInclude Include="game.h" />
-    <ClInclude Include="opencl.h" />
-    <ClInclude Include="opengl.h" />
-    <ClInclude Include="tmplmath.h" />
-    <ClInclude Include="sprite.h" />
-    <ClInclude Include="surface.h" />
     <ClInclude Include="template\common.h" />
+    <ClInclude Include="template\opencl.h" />
+    <ClInclude Include="template\opengl.h" />
     <ClInclude Include="template\precomp.h" />
+    <ClInclude Include="template\sprite.h" />
+    <ClInclude Include="template\surface.h" />
+    <ClInclude Include="template\tmplmath.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cl\kernels.cl" />

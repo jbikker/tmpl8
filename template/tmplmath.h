@@ -24,6 +24,7 @@ struct ALIGN( 8 ) float2
 	float2() = default;
 	float2( const float a, const float b ) : x( a ), y( b ) {}
 	float2( const float a ) : x( a ), y( a ) {}
+	float2( const int2 a ) : x( (float)a.x ), y( (float)a.y ) {}
 	union { struct { float x, y; }; float cell[2]; };
 	float& operator [] ( const int n ) { return cell[n]; }
 };
@@ -83,6 +84,8 @@ struct float3
 	float3( const float a ) : x( a ), y( a ), z( a ) {}
 	float3( const float4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
 	float3( const uint3 a ) : x( (float)a.x ), y( (float)a.y ), z( (float)a.z ) {}
+	float2 xy() { return float2( x, y ); }
+	float2 yz() { return float2( y, z ); }
 	union { struct { float x, y, z; }; float cell[3]; };
 	float& operator [] ( const int n ) { return cell[n]; }
 };
@@ -97,12 +100,24 @@ struct ALIGN( 4 ) uchar4
 
 }
 
+// swap
+template <class T> void Swap( T& x, T& y ) { T t; t = x, x = y, y = t; }
+
+// random numbers
+uint InitSeed( uint seedBase );
+uint RandomUInt();
+uint RandomUInt( uint& seed );
+float RandomFloat();
+float RandomFloat( uint& seed );
+float Rand( float range );
+
 // math
-inline float fminf( float a, float b ) { return a < b ? a : b; }
-inline float fmaxf( float a, float b ) { return a > b ? a : b; }
-inline float rsqrtf( float x ) { return 1.0f / sqrtf( x ); }
-inline float sqrf( float x ) { return x * x; }
-inline int sqr( int x ) { return x * x; }
+inline float fminf( const float a, const float b ) { return a < b ? a : b; }
+inline float fmaxf( const float a, const float b ) { return a > b ? a : b; }
+inline float rsqrtf( const float x ) { return 1.0f / sqrtf( x ); }
+inline constexpr float sqrf( const float x ) { return x * x; }
+inline constexpr int sqr( int x ) { return x * x; }
+inline float3 expf( const float3& a ) { return float3( expf( a.x ), expf( a.y ), expf( a.z ) ); }
 
 inline float2 make_float2( const float a, float b ) { float2 f2; f2.x = a, f2.y = b; return f2; }
 inline float2 make_float2( const float s ) { return make_float2( s, s ); }
@@ -227,6 +242,7 @@ inline float4 operator+( const float4& a, const uint4& b ) { return make_float4(
 inline float4 operator+( const int4& a, const float4& b ) { return make_float4( (float)a.x + b.x, (float)a.y + b.y, (float)a.z + b.z, (float)a.w + b.w ); }
 inline float4 operator+( const uint4& a, const float4& b ) { return make_float4( (float)a.x + b.x, (float)a.y + b.y, (float)a.z + b.z, (float)a.w + b.w ); }
 inline void operator+=( float4& a, const float4& b ) { a.x += b.x;	a.y += b.y;	a.z += b.z;	a.w += b.w; }
+inline void operator+=( float4& a, const float3& b ) { a.x += b.x;	a.y += b.y;	a.z += b.z; }
 inline void operator+=( float4& a, const int4& b ) { a.x += (float)b.x; a.y += (float)b.y; a.z += (float)b.z; a.w += (float)b.w; }
 inline void operator+=( float4& a, const uint4& b ) { a.x += (float)b.x; a.y += (float)b.y; a.z += (float)b.z; a.w += (float)b.w; }
 inline float4 operator+( const float4& a, float b ) { return make_float4( a.x + b, a.y + b, a.z + b, a.w + b ); }
@@ -482,6 +498,10 @@ inline int4 abs( const int4& v ) { return make_int4( abs( v.x ), abs( v.y ), abs
 
 inline float3 reflect( const float3& i, const float3& n ) { return i - 2.0f * n * dot( n, i ); }
 
+inline float2 fma( const  float2 a, const  float2 b, const float2 c ) { return float2( fmaf( a.x, b.x, c.x ), fmaf( a.y, b.y, c.y ) ); }
+inline float3 fma( const  float3 a, const  float3 b, const float3 c ) { return float3( fmaf( a.x, b.x, c.x ), fmaf( a.y, b.y, c.y ), fmaf( a.z, b.z, c.z ) ); }
+inline float4 fma( const  float4 a, const  float4 b, const float4 c ) { return float4( fmaf( a.x, b.x, c.x ), fmaf( a.y, b.y, c.y ), fmaf( a.z, b.z, c.z ), fmaf( a.w, b.w, c.w ) ); }
+
 inline float3 cross( const float3& a, const float3& b ) { return make_float3( a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x ); }
 
 inline float smoothstep( float a, float b, float x )
@@ -503,6 +523,38 @@ inline float4 smoothstep( float4 a, float4 b, float4 x )
 {
 	float4 y = clamp( (x - a) / (b - a), 0.0f, 1.0f );
 	return (y * y * (make_float4( 3.0f ) - (make_float4( 2.0f ) * y)));
+}
+
+inline float3 diffusereflection( const float3 N, uint& seed )
+{
+	float3 R;
+	do
+	{
+		R = make_float3( RandomFloat( seed ) * 2 - 1, RandomFloat( seed ) * 2 - 1, RandomFloat( seed ) * 2 - 1 );
+	} while (dot( R, R ) > 1);
+	if (dot( R, N ) < 0) R *= -1.0f;
+	return normalize( R );
+}
+
+inline float3 cosineweighteddiffusereflection( const float3 N, const float r0, const float r1 )
+{
+	// based on Global Illumination Compendium
+	float term1 = 6.28318531f * r0, term2 = sqrtf( 1 - r1 );
+	float3 R( cosf( term1 ) * term2, sinf( term1 ) * term2, sqrtf( r1 ) );
+	float3 tmp = (fabs( N.x ) > 0.99f) ? float3( 0, 1, 0 ) : float3( 1, 0, 0 );
+	float3 B = normalize( cross( N, tmp ) ), T = cross( B, N );
+	return R.x * T + R.y * B + R.z * N;
+}
+
+inline float3 cosineweighteddiffusereflection( const float3 N, uint& seed )
+{
+	// blog.demofox.org/2020/06/06/casual-shadertoy-path-tracing-2-image-improvement-and-glossy-reflections
+	float3 R;
+	do
+	{
+		R = make_float3( RandomFloat( seed ) * 2 - 1, RandomFloat( seed ) * 2 - 1, RandomFloat( seed ) * 2 - 1 );
+	} while (dot( R, R ) > 1);
+	return normalize( N + normalize( R ) );
 }
 
 // axis aligned bounding box class
@@ -559,18 +611,37 @@ public:
 	__inline float Center( uint axis ) const { return (bmin[axis] + bmax[axis]) * 0.5f; }
 };
 
-// matrix class
+// matrix classes
+class mat2
+{
+public:
+	mat2() = default;
+	mat2( float2 a, float2 b ) { cell[0] = a.x, cell[1] = b.x, cell[2] = a.y, cell[3] = b.y; }
+	// mat2( float2 a, float2 b ) { cell[0] = a.x, cell[1] = a.y, cell[2] = b.x, cell[3] = b.y; }
+	mat2( float a, float b, float c, float d ) { cell[0] = a, cell[1] = b, cell[2] = c, cell[3] = d; }
+	__declspec(align(16)) float cell[4] = { 1, 0, 0, 1 };
+	constexpr static mat2 Identity() { return mat2{}; }
+	float operator()( const int i, const int j ) const { return cell[i * 2 + j]; }
+	float& operator()( const int i, const int j ) { return cell[i * 2 + j]; }
+	float Determinant() const { return cell[0] * cell[3] - cell[1] * cell[2]; }
+};
+
 class mat4
 {
 public:
 	mat4() = default;
-	float cell[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+	__declspec(align(64)) float cell[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 	float& operator [] ( const int idx ) { return cell[idx]; }
 	float operator()( const int i, const int j ) const { return cell[i * 4 + j]; }
 	float& operator()( const int i, const int j ) { return cell[i * 4 + j]; }
 	mat4& operator += ( const mat4& a )
 	{
 		for (int i = 0; i < 16; i++) cell[i] += a.cell[i];
+		return *this;
+	}
+	mat4& operator -= ( const mat4& a )
+	{
+		for (int i = 0; i < 16; i++) cell[i] -= a.cell[i];
 		return *this;
 	}
 	bool operator==( const mat4& m )
@@ -660,6 +731,30 @@ public:
 		M[4] = cell[1], M[5] = cell[5], M[6] = cell[9];
 		M[8] = cell[2], M[9] = cell[6], M[10] = cell[10];
 		return M;
+	}
+	CHECK_RESULT mat4 FastInvertedTransformNoScale() const
+	{
+		mat4 r;
+	#ifdef _MSC_VER
+		// use SSE to transpose the 3x3 part
+		__m128& inM0 = (__m128&)cell[0], & outM0 = (__m128&)r.cell[0];
+		__m128& inM1 = (__m128&)cell[4], & outM1 = (__m128&)r.cell[4];
+		__m128& inM2 = (__m128&)cell[8], & outM2 = (__m128&)r.cell[8];
+		__m128 t0 = _mm_movelh_ps( inM0, inM1 ), t1 = _mm_movehl_ps( inM1, inM0 );
+		outM0 = _mm_shuffle_ps( t0, inM2, 0b11001000 );
+		outM1 = _mm_shuffle_ps( t0, inM2, 0b11011101 );
+		outM2 = _mm_shuffle_ps( t1, inM2, 0b11101000 );
+	#else
+		// fallback for crossplatform compatibility
+		r[0] = cell[0], r[1] = cell[4], r[2] = cell[8];
+		r[4] = cell[1], r[5] = cell[5], r[6] = cell[9];
+		r[8] = cell[2], r[9] = cell[6], r[10] = cell[10];
+	#endif
+		float3 T( cell[3], cell[7], cell[1] );
+		r[3] = -(cell[3] * r[0] + cell[7] * r[1] + cell[11] * r[2]);
+		r[7] = -(cell[3] * r[4] + cell[7] * r[5] + cell[11] * r[6]);
+		r[11] = -(cell[3] * r[8] + cell[7] * r[9] + cell[11] * r[10]);
+		return r;
 	}
 	CHECK_RESULT mat4 Inverted() const
 	{
@@ -755,8 +850,15 @@ bool operator != ( const mat4& a, const mat4& b );
 float4 operator * ( const mat4& a, const float4& b );
 float4 operator * ( const float4& a, const mat4& b );
 
+inline mat2 operator+( const mat2&a, const mat2& b ) { return mat2( a.cell[0] + b.cell[0], a.cell[1] + b.cell[1],a.cell[2] + b.cell[2],a.cell[3] + b.cell[3] ); }
+inline void operator+=( mat2&a, const mat2& b ) { for( int i = 0; i < 4; i++ ) a.cell[i] += b.cell[i]; }
+inline mat2 operator-( const mat2&a, const mat2& b ) { return mat2( a.cell[0] - b.cell[0], a.cell[1] - b.cell[1],a.cell[2] - b.cell[2],a.cell[3] - b.cell[3] ); }
+inline void operator-=( mat2&a, const mat2& b ) { for( int i = 0; i < 4; i++ ) a.cell[i] -= b.cell[i]; }
+
 float3 TransformPosition( const float3& a, const mat4& M );
 float3 TransformVector( const float3& a, const mat4& M );
+float3 TransformPosition_SSE( const __m128& a, const mat4& M );
+float3 TransformVector_SSE( const __m128& a, const mat4& M );
 
 class quat // based on https://github.com/adafruit
 {
@@ -878,16 +980,6 @@ public:
 	quat scale( float s ) const { return quat( w * s, x * s, y * s, z * s ); }
 	float w = 1, x = 0, y = 0, z = 0;
 };
-
-// swap
-template <class T> void Swap( T& x, T& y ) { T t; t = x, x = y, y = t; }
-
-// random numbers
-uint RandomUInt();
-uint RandomUInt( uint& seed );
-float RandomFloat();
-float RandomFloat( uint& seed );
-float Rand( float range );
 
 // Perlin noise
 float noise2D( const float x, const float y );

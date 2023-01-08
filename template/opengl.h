@@ -20,6 +20,7 @@ public:
 
 // template function access
 GLTexture* GetRenderTarget();
+bool WindowHasFocus();
 
 // shader wrapper
 class Shader
