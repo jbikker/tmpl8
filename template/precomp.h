@@ -1,4 +1,5 @@
 // Template, IGAD version 3
+// Get the latest version from: https://github.com/jbikker/tmpl8
 // IGAD/NHTV/UU - Jacco Bikker - 2006-2023
 
 // C++ headers
@@ -328,7 +329,5 @@ public:
 	virtual void KeyDown( int key ) = 0;
 	Surface* screen = 0;
 };
-
-#include "game.h"
 
 // EOF

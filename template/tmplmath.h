@@ -1,3 +1,7 @@
+// Template, IGAD version 3
+// Get the latest version from: https://github.com/jbikker/tmpl8
+// IGAD/NHTV/UU - Jacco Bikker - 2006-2023
+
 #pragma once
 
 namespace Tmpl8 {
@@ -807,8 +811,8 @@ public:
 	{
 		// via https://stackoverflow.com/questions/983999/simple-3x3-matrix-inverse-code-c
 		const float invdet = 1.0f / (cell[0] * (cell[5] * cell[10] - cell[6] * cell[9]) -
-		 cell[4] * (cell[1] * cell[10] - cell[9] * cell[2]) +
-		 cell[8] * (cell[1] * cell[6] - cell[5] * cell[2]));
+			cell[4] * (cell[1] * cell[10] - cell[9] * cell[2]) +
+			cell[8] * (cell[1] * cell[6] - cell[5] * cell[2]));
 		mat4 R;
 		R.cell[0] = (cell[5] * cell[10] - cell[6] * cell[9]) * invdet;
 		R.cell[4] = (cell[8] * cell[6] - cell[4] * cell[10]) * invdet;
@@ -850,10 +854,10 @@ bool operator != ( const mat4& a, const mat4& b );
 float4 operator * ( const mat4& a, const float4& b );
 float4 operator * ( const float4& a, const mat4& b );
 
-inline mat2 operator+( const mat2&a, const mat2& b ) { return mat2( a.cell[0] + b.cell[0], a.cell[1] + b.cell[1],a.cell[2] + b.cell[2],a.cell[3] + b.cell[3] ); }
-inline void operator+=( mat2&a, const mat2& b ) { for( int i = 0; i < 4; i++ ) a.cell[i] += b.cell[i]; }
-inline mat2 operator-( const mat2&a, const mat2& b ) { return mat2( a.cell[0] - b.cell[0], a.cell[1] - b.cell[1],a.cell[2] - b.cell[2],a.cell[3] - b.cell[3] ); }
-inline void operator-=( mat2&a, const mat2& b ) { for( int i = 0; i < 4; i++ ) a.cell[i] -= b.cell[i]; }
+inline mat2 operator+( const mat2& a, const mat2& b ) { return mat2( a.cell[0] + b.cell[0], a.cell[1] + b.cell[1], a.cell[2] + b.cell[2], a.cell[3] + b.cell[3] ); }
+inline void operator+=( mat2& a, const mat2& b ) { for (int i = 0; i < 4; i++) a.cell[i] += b.cell[i]; }
+inline mat2 operator-( const mat2& a, const mat2& b ) { return mat2( a.cell[0] - b.cell[0], a.cell[1] - b.cell[1], a.cell[2] - b.cell[2], a.cell[3] - b.cell[3] ); }
+inline void operator-=( mat2& a, const mat2& b ) { for (int i = 0; i < 4; i++) a.cell[i] -= b.cell[i]; }
 
 float3 TransformPosition( const float3& a, const mat4& M );
 float3 TransformVector( const float3& a, const mat4& M );

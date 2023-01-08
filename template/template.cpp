@@ -1,7 +1,9 @@
 // Template, IGAD version 3
+// Get the latest version from: https://github.com/jbikker/tmpl8
 // IGAD/NHTV/UU - Jacco Bikker - 2006-2023
 
 #include "precomp.h"
+#include "game.h"
 
 #pragma comment( linker, "/subsystem:windows /ENTRY:mainCRTStartup" )
 
