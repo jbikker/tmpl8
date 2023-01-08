@@ -1,5 +1,5 @@
 // Template, IGAD version 3
-// IGAD/NHTV/UU - Jacco Bikker - 2006-2022
+// IGAD/NHTV/UU - Jacco Bikker - 2006-2023
 
 #include "precomp.h"
 
@@ -90,9 +90,9 @@ void main()
 	glfwWindowHint( GLFW_STENCIL_BITS, GL_FALSE );
 	glfwWindowHint( GLFW_RESIZABLE, GL_FALSE /* easier :) */ );
 #ifdef FULLSCREEN
-	window = glfwCreateWindow( SCRWIDTH, SCRHEIGHT, "Tmpl8-2022", glfwGetPrimaryMonitor(), 0 );
+	window = glfwCreateWindow( SCRWIDTH, SCRHEIGHT, "Tmpl8-2023", glfwGetPrimaryMonitor(), 0 );
 #else
-	window = glfwCreateWindow( SCRWIDTH, SCRHEIGHT, "Tmpl8-2022", 0, 0 );
+	window = glfwCreateWindow( SCRWIDTH, SCRHEIGHT, "Tmpl8-2023", 0, 0 );
 #endif
 	if (!window) FatalError( "glfwCreateWindow failed." );
 	glfwMakeContextCurrent( window );
