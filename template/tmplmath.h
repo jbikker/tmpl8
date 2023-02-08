@@ -104,6 +104,8 @@ struct ALIGN( 4 ) uchar4
 
 }
 
+using namespace Tmpl8;
+
 // swap
 template <class T> void Swap( T& x, T& y ) { T t; t = x, x = y, y = t; }
 

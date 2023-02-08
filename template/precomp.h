@@ -34,9 +34,33 @@ typedef int BOOL;				// for freeimage.h
 // C++ practice but a simplification for template projects.
 using namespace std;
 
+// aligned memory allocations
+#ifdef _MSC_VER
+#define ALIGN( x ) __declspec( align( x ) )
+#define MALLOC64( x ) ( ( x ) == 0 ? 0 : _aligned_malloc( ( x ), 64 ) )
+#define FREE64( x ) _aligned_free( x )
+#else
+#define ALIGN( x ) __attribute__( ( aligned( x ) ) )
+#define MALLOC64( x ) ( ( x ) == 0 ? 0 : aligned_alloc( 64, ( x ) ) )
+#define FREE64( x ) free( x )
+#endif
+#if defined(__GNUC__) && (__GNUC__ >= 4)
+#define CHECK_RESULT __attribute__ ((warn_unused_result))
+#elif defined(_MSC_VER) && (_MSC_VER >= 1700)
+#define CHECK_RESULT _Check_return_
+#else
+#define CHECK_RESULT
+#endif
+
+// math classes
+#include "tmplmath.h"
+
 // template headers
 #include "surface.h"
 #include "sprite.h"
+
+// namespaces
+using namespace Tmpl8;
 
 // clang-format off
 
@@ -84,30 +108,6 @@ using namespace std;
 #define NOMCX
 #define NOIME
 #include "windows.h"
-
-// namespaces
-using namespace Tmpl8;
-
-// aligned memory allocations
-#ifdef _MSC_VER
-#define ALIGN( x ) __declspec( align( x ) )
-#define MALLOC64( x ) ( ( x ) == 0 ? 0 : _aligned_malloc( ( x ), 64 ) )
-#define FREE64( x ) _aligned_free( x )
-#else
-#define ALIGN( x ) __attribute__( ( aligned( x ) ) )
-#define MALLOC64( x ) ( ( x ) == 0 ? 0 : aligned_alloc( 64, ( x ) ) )
-#define FREE64( x ) free( x )
-#endif
-#if defined(__GNUC__) && (__GNUC__ >= 4)
-#define CHECK_RESULT __attribute__ ((warn_unused_result))
-#elif defined(_MSC_VER) && (_MSC_VER >= 1700)
-#define CHECK_RESULT _Check_return_
-#else
-#define CHECK_RESULT
-#endif
-
-// math classes
-#include "tmplmath.h"
 
 // OpenCL headers
 #define CL_USE_DEPRECATED_OPENCL_2_0_APIS // safe; see https://stackoverflow.com/a/28500846
