@@ -6,6 +6,9 @@
 
 namespace Tmpl8 {
 
+#pragma warning ( push )
+#pragma warning ( disable: 4201 /* nameless struct / union */ )
+
 // vector type placeholders, carefully matching OpenCL's layout and alignment
 struct ALIGN( 8 ) int2
 {
@@ -101,6 +104,8 @@ struct ALIGN( 4 ) uchar4
 	union { struct { uchar x, y, z, w; }; uchar cell[4]; };
 	uchar& operator [] ( const int n ) { return cell[n]; }
 };
+
+#pragma warning ( pop )
 
 }
 
@@ -603,6 +608,8 @@ public:
 		return a;
 	}
 	// data members
+#pragma warning ( push )
+#pragma warning ( disable: 4201 /* nameless struct / union */ )
 	union
 	{
 		struct
@@ -612,6 +619,7 @@ public:
 		};
 		__m128 bounds[2] = { _mm_setr_ps( 1e34f, 1e34f, 1e34f, 0 ), _mm_setr_ps( -1e34f, -1e34f, -1e34f, 0 ) };
 	};
+#pragma warning ( push )
 	__inline void SetBounds( const __m128 min4, const __m128 max4 ) { bmin4 = min4; bmax4 = max4; }
 	__inline __m128 Center() const { return _mm_mul_ps( _mm_add_ps( bmin4, bmax4 ), _mm_set_ps1( 0.5f ) ); }
 	__inline float Center( uint axis ) const { return (bmin[axis] + bmax[axis]) * 0.5f; }

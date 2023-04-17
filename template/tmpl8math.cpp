@@ -28,14 +28,14 @@ uint RandomUInt()
 float RandomFloat() { return RandomUInt() * 2.3283064365387e-10f; }
 float Rand( float range ) { return RandomFloat() * range; }
 // local seed
-uint RandomUInt( uint& seed )
+uint RandomUInt( uint& customSeed )
 {
-	seed ^= seed << 13;
-	seed ^= seed >> 17;
-	seed ^= seed << 5;
-	return seed;
+	customSeed ^= customSeed << 13;
+	customSeed ^= customSeed >> 17;
+	customSeed ^= customSeed << 5;
+	return customSeed;
 }
-float RandomFloat( uint& seed ) { return RandomUInt( seed ) * 2.3283064365387e-10f; }
+float RandomFloat( uint& customSeed ) { return RandomUInt( customSeed ) * 2.3283064365387e-10f; }
 
 // Perlin noise implementation - https://stackoverflow.com/questions/29711668/perlin-noise-generation
 static int numX = 512, numY = 512, numOctaves = 7, primeIndex = 0;

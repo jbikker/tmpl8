@@ -37,7 +37,7 @@ void BindVBO( const uint idx, const uint N, const GLuint id )
 	CheckGL();
 }
 
-void CheckShader( GLuint shader, const char* vshader, const char* fshader )
+void CheckShader( GLuint shader )
 {
 	char buffer[1024];
 	memset( buffer, 0, sizeof( buffer ) );
@@ -47,7 +47,7 @@ void CheckShader( GLuint shader, const char* vshader, const char* fshader )
 	FATALERROR_IF( length > 0 && strstr( buffer, "ERROR" ), "Shader compile error:\n%s", buffer );
 }
 
-void CheckProgram( GLuint id, const char* vshader, const char* fshader )
+void CheckProgram( GLuint id )
 {
 	char buffer[1024];
 	memset( buffer, 0, sizeof( buffer ) );
@@ -181,17 +181,17 @@ void Shader::Compile( const char* vtext, const char* ftext )
 	pixel = glCreateShader( GL_FRAGMENT_SHADER );
 	glShaderSource( vertex, 1, &vtext, 0 );
 	glCompileShader( vertex );
-	CheckShader( vertex, vtext, ftext );
+	CheckShader( vertex );
 	glShaderSource( pixel, 1, &ftext, 0 );
 	glCompileShader( pixel );
-	CheckShader( pixel, vtext, ftext );
+	CheckShader( pixel );
 	ID = glCreateProgram();
 	glAttachShader( ID, vertex );
 	glAttachShader( ID, pixel );
 	glBindAttribLocation( ID, 0, "pos" );
 	glBindAttribLocation( ID, 1, "tuv" );
 	glLinkProgram( ID );
-	CheckProgram( ID, vtext, ftext );
+	CheckProgram( ID );
 	CheckGL();
 }
 

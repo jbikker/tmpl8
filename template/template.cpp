@@ -50,32 +50,32 @@ void InitRenderTarget( int w, int h )
 	scrwidth = w, scrheight = h;
 	renderTarget = new GLTexture( scrwidth, scrheight, GLTexture::INTTARGET );
 }
-void ReshapeWindowCallback( GLFWwindow* window, int w, int h )
+void ReshapeWindowCallback( GLFWwindow*, int w, int h )
 {
 	glViewport( 0, 0, w, h );
 }
-void KeyEventCallback( GLFWwindow* window, int key, int scancode, int action, int mods )
+void KeyEventCallback( GLFWwindow*, int key, int, int action, int )
 {
 	if (key == GLFW_KEY_ESCAPE) running = false;
 	if (action == GLFW_PRESS) { if (app) if (key >= 0) app->KeyDown( key ); keystate[key & 255] = 1; }
 	else if (action == GLFW_RELEASE) { if (app) if (key >= 0) app->KeyUp( key ); keystate[key & 255] = 0; }
 }
-void CharEventCallback( GLFWwindow* window, uint code ) { /* nothing here yet */ }
-void WindowFocusCallback( GLFWwindow* window, int focused ) { hasFocus = (focused == GL_TRUE); }
-void MouseButtonCallback( GLFWwindow* window, int button, int action, int mods )
+void CharEventCallback( GLFWwindow*, uint ) { /* nothing here yet */ }
+void WindowFocusCallback( GLFWwindow*, int focused ) { hasFocus = (focused == GL_TRUE); }
+void MouseButtonCallback( GLFWwindow*, int button, int action, int )
 {
 	if (action == GLFW_PRESS) { if (app) app->MouseDown( button ); }
 	else if (action == GLFW_RELEASE) { if (app) app->MouseUp( button ); }
 }
-void MouseScrollCallback( GLFWwindow* window, double x, double y )
+void MouseScrollCallback( GLFWwindow*, double, double y )
 {
 	app->MouseWheel( (float)y );
 }
-void MousePosCallback( GLFWwindow* window, double x, double y )
+void MousePosCallback( GLFWwindow*, double x, double y )
 {
 	if (app) app->MouseMove( (int)x, (int)y );
 }
-void ErrorCallback( int error, const char* description )
+void ErrorCallback( int, const char* description )
 {
 	fprintf( stderr, "GLFW Error: %s\n", description );
 }
@@ -136,7 +136,7 @@ void main()
 	app->Init();
 	// done, enter main loop
 #if 1
-	// basic shader: apply gamma correction
+	// basic shader, no gamma correction
 	Shader* shader = new Shader(
 		"#version 330\nin vec4 p;\nin vec2 t;out vec2 u;void main(){u=t;gl_Position=p;}",
 		"#version 330\nuniform sampler2D c;in vec2 u;out vec4 f;void main(){f=/*sqrt*/(texture(c,u));}", true );
@@ -401,7 +401,6 @@ void JobManager::GetProcessorCount( uint& cores, uint& logical )
 			buffer = (char*)malloc( len );
 			if (GetLogicalProcessorInformationEx( RelationAll, (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)buffer, &len ))
 			{
-				DWORD offset = 0;
 				char* ptr = buffer;
 				while (ptr < buffer + len)
 				{

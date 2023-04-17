@@ -16,7 +16,7 @@ void Game::Init()
 // -----------------------------------------------------------
 // Main application tick function - Executed once per frame
 // -----------------------------------------------------------
-void Game::Tick( float deltaTime )
+void Game::Tick( float /* deltaTime */ )
 {
 	// NOTE: clear this function before actual use; code is only for 
 	// demonstration purposes. See _ getting started.pdf for details.

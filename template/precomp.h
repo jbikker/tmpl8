@@ -53,7 +53,7 @@ using namespace std;
 #endif
 
 // math classes
-#include "tmplmath.h"
+#include "tmpl8math.h"
 
 // template headers
 #include "surface.h"

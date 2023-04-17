@@ -132,7 +132,7 @@ void Surface::Line( float x1, float y1, float x2, float y2, uint c )
 		if (!(c0 | c1)) { accept = true; break; }
 		else if (c0 & c1) break; else
 		{
-			float x, y;
+			float x = 0, y = 0;
 			const int co = c0 ? c0 : c1;
 			if (co & 8) x = x1 + (x2 - x1) * (ymax - y1) / (y2 - y1), y = ymax;
 			else if (co & 4) x = x1 + (x2 - x1) * (ymin - y1) / (y2 - y1), y = ymin;
@@ -174,7 +174,7 @@ void Surface::CopyTo( Surface* d, int x, int y )
 		if ((srcwidth > 0) && (srcheight > 0))
 		{
 			dst += x + dstwidth * y;
-			for (int y = 0; y < srcheight; y++)
+			for (int i = 0; i < srcheight; i++)
 			{
 				memcpy( dst, src, srcwidth * 4 );
 				dst += dstwidth, src += width;

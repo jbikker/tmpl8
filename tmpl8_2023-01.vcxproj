@@ -50,7 +50,7 @@
       <AdditionalIncludeDirectories>template;.;lib\glad;lib\glfw\include;lib\OpenCL\inc;lib\zlib</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>precomp.h</PrecompiledHeaderFile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <ExceptionHandling>Sync</ExceptionHandling>
     </ClCompile>
     <Link>
@@ -132,7 +132,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">precomp.h</PrecompiledHeaderFile>
     </ClCompile>
-    <ClCompile Include="template\tmplmath.cpp" />
+    <ClCompile Include="template\tmpl8math.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cl\tools.cl" />
@@ -143,7 +143,7 @@
     <ClInclude Include="template\precomp.h" />
     <ClInclude Include="template\sprite.h" />
     <ClInclude Include="template\surface.h" />
-    <ClInclude Include="template\tmplmath.h" />
+    <ClInclude Include="template\tmpl8math.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cl\kernels.cl" />

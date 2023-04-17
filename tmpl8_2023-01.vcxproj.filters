@@ -17,7 +17,7 @@
     <ClCompile Include="template\surface.cpp">
       <Filter>template</Filter>
     </ClCompile>
-    <ClCompile Include="template\tmplmath.cpp">
+    <ClCompile Include="template\tmpl8math.cpp">
       <Filter>template</Filter>
     </ClCompile>
   </ItemGroup>
@@ -44,7 +44,7 @@
     <ClInclude Include="template\surface.h">
       <Filter>template</Filter>
     </ClInclude>
-    <ClInclude Include="template\tmplmath.h">
+    <ClInclude Include="template\tmpl8math.h">
       <Filter>template</Filter>
     </ClInclude>
   </ItemGroup>
