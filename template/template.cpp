@@ -12,6 +12,7 @@ using namespace Tmpl8;
 // Enable usage of dedicated GPUs in notebooks
 // Note: this does cause the linker to produce a .lib and .exp file;
 // see http://developer.download.nvidia.com/devzone/devcenter/gamegraphics/files/OptimusRenderingPolicies.pdf
+// Alternatively, you can *disable* this to make your app use less power.
 #ifdef WIN32
 extern "C"
 {
