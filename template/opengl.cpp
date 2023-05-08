@@ -4,6 +4,8 @@
 
 #include "precomp.h"
 
+extern bool IGP_detected;
+
 // OpenGL helper functions
 void _CheckGL( const char* f, int l )
 {
@@ -65,8 +67,20 @@ void DrawQuad()
 		// generate buffers
 		static const GLfloat verts[] = { -1, 1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, -1, 0, 1, -1, 0 };
 		static const GLfloat uvdata[] = { 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1 };
-		GLuint vertexBuffer = CreateVBO( verts, sizeof( verts ) );
-		GLuint UVBuffer = CreateVBO( uvdata, sizeof( uvdata ) );
+		static const GLfloat verts_igp[] = { 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0 };
+		static const GLfloat uvdata_igp[] = { -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, 1, 1 };
+		GLuint vertexBuffer, UVBuffer;
+		if (IGP_detected)
+		{
+			// not sure why it is needed - without it IGPs tile and clamp the output.
+			vertexBuffer = CreateVBO( verts_igp, sizeof( verts_igp ) );
+			UVBuffer = CreateVBO( uvdata_igp, sizeof( uvdata_igp ) );
+		}
+		else
+		{
+			vertexBuffer = CreateVBO( verts, sizeof( verts ) );
+			UVBuffer = CreateVBO( uvdata, sizeof( uvdata ) );
+		}
 		glGenVertexArrays( 1, &vao );
 		glBindVertexArray( vao );
 		BindVBO( 0, 3, vertexBuffer );

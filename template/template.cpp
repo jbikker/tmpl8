@@ -29,6 +29,8 @@ static bool hasFocus = true, running = true;
 static GLTexture* renderTarget = 0;
 static int scrwidth = 0, scrheight = 0;
 static TheApp* app = 0;
+bool IGP_detected = false;
+
 uint keystate[256] = { 0 };
 
 // static member data for instruction set support class
@@ -113,7 +115,12 @@ void main()
 	glDisable( GL_DEPTH_TEST );
 	glDisable( GL_CULL_FACE );
 	glDisable( GL_BLEND );
+	glViewport( 0, 0, SCRWIDTH, SCRHEIGHT );
 	CheckGL();
+	char* vendor = (char*)glGetString( GL_VENDOR );
+	char* renderer = (char*)glGetString( GL_RENDERER );
+	if (strstr( vendor, "Intel" )) IGP_detected = true;
+	if (strstr( renderer, "Arc" )) IGP_detected = false;
 	// we want a console window for text output
 #ifndef FULLSCREEN
 	CONSOLE_SCREEN_BUFFER_INFO coninfo;
