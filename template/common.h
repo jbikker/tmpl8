@@ -1,6 +1,6 @@
 // Template, IGAD version 3
 // Get the latest version from: https://github.com/jbikker/tmpl8
-// IGAD/NHTV/UU - Jacco Bikker - 2006-2023
+// IGAD/NHTV/BUAS/UU - Jacco Bikker - 2006-2023
 
 // common.h is to be included in host and device code and stores
 // global settings and defines.
@@ -17,8 +17,3 @@
 #define TWOPI		6.28318530717958647692528f
 #define SQRT_PI_INV	0.56418958355f
 #define LARGE_FLOAT	1e34f
-
-// IMPORTANT NOTE ON OPENCL COMPATIBILITY ON OLDER LAPTOPS:
-// Without a GPU, a laptop needs at least a 'Broadwell' Intel CPU (5th gen, 2015):
-// Intel's OpenCL implementation 'NEO' is not available on older devices.
-// Same is true for Vulkan, OpenGL 4.0 and beyond, as well as DX11 and DX12.

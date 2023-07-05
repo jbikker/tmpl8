@@ -1,18 +1,26 @@
 // Template, IGAD version 3
 // Get the latest version from: https://github.com/jbikker/tmpl8
-// IGAD/NHTV/UU - Jacco Bikker - 2006-2023
+// IGAD/NHTV/BUAS/UU - Jacco Bikker - 2006-2023
 
 #pragma once
 
 namespace Tmpl8 {
 
+// helper macro for line clipping
+#define OUTCODE(x,y) (((x)<xmin)?1:(((x)>xmax)?2:0))+(((y)<ymin)?4:(((y)>ymax)?8:0))
+
 // pixel operations
+
+// ScaleColor: change the intensity of red, green and blue using a single
+// fixed-point scale in the range 0..256, where 256 is 100%.
 inline uint ScaleColor( const uint c, const uint scale )
 {
 	const uint rb = (((c & 0xff00ff) * scale) >> 8) & 0x00ff00ff;
 	const uint ag = (((c & 0xff00ff00) >> 8) * scale) & 0xff00ff00;
 	return rb + ag;
 }
+
+// AddBlend: add together two colors, with clamping.
 inline uint AddBlend( const uint c1, const uint c2 )
 {
 	const uint r1 = (c1 >> 16) & 255, r2 = (c2 >> 16) & 255;
@@ -23,6 +31,8 @@ inline uint AddBlend( const uint c1, const uint c2 )
 	const uint b = min( 255u, b1 + b2 );
 	return (r << 16) + (g << 8) + b;
 }
+
+// SubBlend: subtract a color from another color, with clamping.
 inline uint SubBlend( uint a_Color1, uint a_Color2 )
 {
 	int red = (a_Color1 & 0xff0000) - (a_Color2 & 0xff0000);
@@ -60,6 +70,24 @@ public:
 	uint* pixels = 0;
 	int width = 0, height = 0;
 	bool ownBuffer = false;
+	// static data for the hardcoded font
+	static inline char font[51][5][6];
+	static inline int transl[256];
+	static inline bool fontInitialized = false;
+};
+
+// 8-bit (paletized) surface container
+class Surface8
+{
+public:
+	Surface8( int w, int h )
+	{
+		pixels = new unsigned char[w * h];
+		pal = new unsigned int[256];
+	}
+	unsigned char* pixels;
+	unsigned int* pal;
+	int width, height;
 };
 
 }

@@ -1,6 +1,6 @@
 // Template, IGAD version 3
 // Get the latest version from: https://github.com/jbikker/tmpl8
-// IGAD/NHTV/UU - Jacco Bikker - 2006-2023
+// IGAD/NHTV/BUAS/UU - Jacco Bikker - 2006-2023
 
 #pragma once
 
@@ -52,7 +52,8 @@ public:
 #endif
 	void Run( const size_t count, const size_t localSize = 0, cl_event* eventToWaitFor = 0, cl_event* eventToSet = 0 );
 	void Run2D( const int2 count, const int2 lsize = 0, cl_event* eventToWaitFor = 0, cl_event* eventToSet = 0 );
-	// argument passing with template trickery
+	// Argument passing with template trickery; up to 20 arguments in a single call;
+	// each argument may be of any of the supported types. Approach borrowed from NVIDIA/CUDA.
 #define T_ typename
 	template<T_ A> void SetArguments( A a ) { InitArgs(); SetArgument( 0, a ); }
 	template<T_ A, T_ B> void SetArguments( A a, B b ) { InitArgs(); S( 0, a ); S( 1, b ); }

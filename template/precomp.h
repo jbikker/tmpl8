@@ -1,40 +1,39 @@
 // Template, IGAD version 3
 // Get the latest version from: https://github.com/jbikker/tmpl8
-// IGAD/NHTV/UU - Jacco Bikker - 2006-2023
+// IGAD/NHTV/BUAS/UU - Jacco Bikker - 2006-2023
 
-// C++ headers
-#include <chrono>
-#include <fstream>
-#include <vector>
-#include <list>
-#include <string>
-#include <thread>
-#include <math.h>
-#include <algorithm>
-#include <assert.h>
-#include <io.h>
+// A precompiled header speeds up compilation by precompiling stable code.
+// The content in this file is source code that you will likely not change
+// for your project. More info: 
+// www.codeproject.com/Articles/1188975/How-to-Optimize-Compilation-Times-with-Precompil
+
+// common C++ headers
+#include <chrono>				// timing: struct Timer depends on this
+#include <fstream>				// file i/o
+#include <vector>				// standard template library std::vector
+#include <list>					// standard template library std::list
+#include <algorithm>			// standard algorithms for stl containers
+#include <string>				// strings
+// #include <thread>			// currently unused; enable to use Windows threads.
+#include <math.h>				// c standard math library
+#include <assert.h>				// runtime assertions
 
 // header for AVX, and every technology before it.
 // if your CPU does not support this (unlikely), include the appropriate header instead.
 // see: https://stackoverflow.com/a/11228864/2844473
 #include <immintrin.h>
 
-// basic types
+// shorthand for basic types
 typedef unsigned char uchar;
 typedef unsigned int uint;
 typedef unsigned short ushort;
-#ifdef _MSC_VER
-typedef unsigned char BYTE;		// for freeimage.h
-typedef unsigned short WORD;	// for freeimage.h
-typedef unsigned long DWORD;	// for freeimage.h
-typedef int BOOL;				// for freeimage.h
-#endif
 
-// "leak" common namespaces to all compilation units. This is not standard
-// C++ practice but a simplification for template projects.
+// "leak" common namespaces to all compilation units. This is not standard // C++ practice 
+// but a deliberate simplification for template projects. Feel free to remove this if it
+// offends you.
 using namespace std;
 
-// aligned memory allocations
+// low-level: aligned memory allocations
 #ifdef _MSC_VER
 #define ALIGN( x ) __declspec( align( x ) )
 #define MALLOC64( x ) ( ( x ) == 0 ? 0 : _aligned_malloc( ( x ), 64 ) )
@@ -64,14 +63,13 @@ using namespace Tmpl8;
 
 // clang-format off
 
-// windows.h: disable as much as possible to speed up compilation.
+// windows.h: disable a few things to speed up compilation.
 #define NOMINMAX
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
 #endif
 #define NOGDICAPMASKS
-// #define NOVIRTUALKEYCODES
 #define NOWINMESSAGES
 #define NOWINSTYLES
 #define NOSYSMETRICS
@@ -201,21 +199,11 @@ string TextFileRead( const char* _File );
 int LineCount( const string s );
 void TextFileWrite( const string& text, const char* _File );
 
-// global project settigs; shared with OpenCL
+// global project settigs; shared with OpenCL.
+// If you change these a lot, consider moving the include out of precomp.h.
 #include "common.h"
 
-// InstructionSet.cpp
-// Compile by using: cl /EHsc /W4 InstructionSet.cpp
-// processor: x86, x64
-// Uses the __cpuid intrinsic to get information about
-// CPU extended instruction set support.
-
-#include <iostream>
-#include <bitset>
-#include <array>
-#include <intrin.h>
-
-// instruction set detection
+// low-level: instruction set detection
 #ifdef _WIN32
 #define cpuid(info, x) __cpuidex(info, x, 0)
 #else
@@ -225,29 +213,14 @@ void cpuid( int info[4], int InfoType ) { __cpuid_count( InfoType, 0, info[0], i
 class CPUCaps // from https://github.com/Mysticial/FeatureDetector
 {
 public:
-	static inline bool HW_MMX = false;
-	static inline bool HW_x64 = false;
-	static inline bool HW_ABM = false;
-	static inline bool HW_RDRAND = false;
-	static inline bool HW_BMI1 = false;
-	static inline bool HW_BMI2 = false;
-	static inline bool HW_ADX = false;
-	static inline bool HW_PREFETCHWT1 = false;
+	static inline bool HW_MMX = false, HW_x64 = false, HW_ABM = false, HW_RDRAND = false;
+	static inline bool HW_BMI1 = false, HW_BMI2 = false, HW_ADX = false, HW_PREFETCHWT1 = false;
 	// SIMD: 128-bit
-	static inline bool HW_SSE = false;
-	static inline bool HW_SSE2 = false;
-	static inline bool HW_SSE3 = false;
-	static inline bool HW_SSSE3 = false;
-	static inline bool HW_SSE41 = false;
-	static inline bool HW_SSE42 = false;
-	static inline bool HW_SSE4a = false;
-	static inline bool HW_AES = false;
-	static inline bool HW_SHA = false;
+	static inline bool HW_SSE = false, HW_SSE2 = false, HW_SSE3 = false, HW_SSSE3 = false;
+	static inline bool HW_SSE41 = false, HW_SSE42 = false, HW_SSE4a = false;
+	static inline bool HW_AES = false, HW_SHA = false;
 	// SIMD: 256-bit
-	static inline bool HW_AVX = false;
-	static inline bool HW_XOP = false;
-	static inline bool HW_FMA3 = false;
-	static inline bool HW_FMA4 = false;
+	static inline bool HW_AVX = false, HW_XOP = false, HW_FMA3 = false, HW_FMA4 = false;
 	static inline bool HW_AVX2 = false;
 	// SIMD: 512-bit
 	static inline bool HW_AVX512F = false;    //  AVX512 Foundation
@@ -267,7 +240,7 @@ public:
 		int nIds = info[0];
 		cpuid( info, 0x80000000 );
 		unsigned nExIds = info[0];
-		// detect Features
+		// detect cpu features
 		if (nIds >= 0x00000001)
 		{
 			cpuid( info, 0x00000001 );

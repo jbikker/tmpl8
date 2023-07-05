@@ -1,6 +1,6 @@
 // Template, IGAD version 3
 // Get the latest version from: https://github.com/jbikker/tmpl8
-// IGAD/NHTV/UU - Jacco Bikker - 2006-2023
+// IGAD/NHTV/BUAS/UU - Jacco Bikker - 2006-2023
 
 #include "precomp.h"
 
@@ -12,14 +12,10 @@
 
 using namespace Tmpl8;
 
-// surface implementation
-// ----------------------------------------------------------------------------
-
-static char s_Font[51][5][6];
-static bool fontInitialized = false;
-static int s_Transl[256];
+// Surface class implementation
 
 Surface::Surface( int w, int h, uint* b ) : pixels( b ), width( w ), height( h ) {}
+
 Surface::Surface( int w, int h ) : width( w ), height( h )
 {
 	pixels = (uint*)MALLOC64( w * h * sizeof( uint ) );
@@ -27,34 +23,33 @@ Surface::Surface( int w, int h ) : width( w ), height( h )
 }
 Surface::Surface( const char* file ) : pixels( 0 ), width( 0 ), height( 0 )
 {
+	// check if file exists; show an error if there is a problem
 	FILE* f = fopen( file, "rb" );
 	if (!f) FatalError( "File not found: %s", file );
 	fclose( f );
+	// load the file
 	Surface::LoadFromFile( file );
 }
 
 void Surface::LoadFromFile( const char* file )
 {
+	// use stb_image to load the image file
 	int n;
 	unsigned char* data = stbi_load( file, &width, &height, &n, 0 );
-	if (data)
+	if (!data) return; // load failed
+	pixels = (uint*)MALLOC64( width * height * sizeof( uint ) );
+	ownBuffer = true; // needs to be deleted in destructor
+	const int s = width * height;
+	if (n == 1) /* greyscale */ for (int i = 0; i < s; i++)
 	{
-		pixels = (uint*)MALLOC64( width * height * sizeof( uint ) );
-		ownBuffer = true; // needs to be deleted in destructor
-		const int s = width * height;
-		if (n == 1) // greyscale
-		{
-			for (int i = 0; i < s; i++)
-			{
-				const unsigned char p = data[i];
-				pixels[i] = p + (p << 8) + (p << 16);
-			}
-		}
-		else
-		{
-			for (int i = 0; i < s; i++) pixels[i] = (data[i * n + 0] << 16) + (data[i * n + 1] << 8) + data[i * n + 2];
-		}
+		const unsigned char p = data[i];
+		pixels[i] = p + (p << 8) + (p << 16);
 	}
+	else
+	{
+		for (int i = 0; i < s; i++) pixels[i] = (data[i * n + 0] << 16) + (data[i * n + 1] << 8) + data[i * n + 2];
+	}
+	// free stb_image data
 	stbi_image_free( data );
 }
 
@@ -65,6 +60,7 @@ Surface::~Surface()
 
 void Surface::Clear( uint c )
 {
+	// WARNING: not the fastest way to do this.
 	const int s = width * height;
 	for (int i = 0; i < s; i++) pixels[i] = c;
 }
@@ -99,10 +95,12 @@ void Surface::Bar( int x1, int y1, int x2, int y2, uint c )
 	}
 }
 
+// Surface::Print: Print some text with the hard-coded mini-font.
 void Surface::Print( const char* s, int x1, int y1, uint c )
 {
 	if (!fontInitialized)
 	{
+		// we will initialize the font on first use
 		InitCharset();
 		fontInitialized = true;
 	}
@@ -110,17 +108,17 @@ void Surface::Print( const char* s, int x1, int y1, uint c )
 	for (int i = 0; i < (int)(strlen( s )); i++, t += 6)
 	{
 		int pos = 0;
-		if ((s[i] >= 'A') && (s[i] <= 'Z')) pos = s_Transl[(unsigned short)(s[i] - ('A' - 'a'))];
-		else pos = s_Transl[(unsigned short)s[i]];
+		if ((s[i] >= 'A') && (s[i] <= 'Z')) pos = transl[(unsigned short)(s[i] - ('A' - 'a'))];
+		else pos = transl[(unsigned short)s[i]];
 		uint* a = t;
-		const char* u = (const char*)s_Font[pos];
+		const char* u = (const char*)font[pos];
 		for (int v = 0; v < 5; v++, u++, a += width)
 			for (int h = 0; h < 5; h++) if (*u++ == 'o') *(a + h) = c, * (a + h + width) = 0;
 	}
 }
 
-#define OUTCODE(x,y) (((x)<xmin)?1:(((x)>xmax)?2:0))+(((y)<ymin)?4:(((y)>ymax)?8:0))
-
+// Surface::Line: Draw a line between the specified screen coordinates.
+// Uses clipping for lines that are partially off-screen. Not efficient.
 void Surface::Line( float x1, float y1, float x2, float y2, uint c )
 {
 	// clip (Cohen-Sutherland, https://en.wikipedia.org/wiki/Cohen%E2%80%93Sutherland_algorithm)
@@ -143,20 +141,16 @@ void Surface::Line( float x1, float y1, float x2, float y2, uint c )
 		}
 	}
 	if (!accept) return;
-	float b = x2 - x1;
-	float h = y2 - y1;
-	float l = fabsf( b );
+	float b = x2 - x1, h = y2 - y1, l = fabsf( b );
 	if (fabsf( h ) > l) l = fabsf( h );
 	int il = (int)l;
-	float dx = b / (float)l;
-	float dy = h / (float)l;
-	for (int i = 0; i <= il; i++)
-	{
+	float dx = b / (float)l, dy = h / (float)l;
+	for (int i = 0; i <= il; i++, x1 += dx, y1 += dy)
 		*(pixels + (int)x1 + (int)y1 * width) = c;
-		x1 += dx, y1 += dy;
-	}
 }
 
+// Surface::CopyTo: Copy the contents of one Surface to another, at the specified
+// location. With clipping.
 void Surface::CopyTo( Surface* d, int x, int y )
 {
 	uint* dst = d->pixels;
@@ -185,11 +179,11 @@ void Surface::CopyTo( Surface* d, int x, int y )
 
 void Surface::SetChar( int c, const char* c1, const char* c2, const char* c3, const char* c4, const char* c5 )
 {
-	strcpy( s_Font[c][0], c1 );
-	strcpy( s_Font[c][1], c2 );
-	strcpy( s_Font[c][2], c3 );
-	strcpy( s_Font[c][3], c4 );
-	strcpy( s_Font[c][4], c5 );
+	strcpy( font[c][0], c1 );
+	strcpy( font[c][1], c2 );
+	strcpy( font[c][2], c3 );
+	strcpy( font[c][3], c4 );
+	strcpy( font[c][4], c5 );
 }
 
 void Surface::InitCharset()
@@ -246,6 +240,6 @@ void Surface::InitCharset()
 	SetChar( 49, "::::o", ":::o:", "::o::", ":o:::", "o::::" );
 	char c[] = "abcdefghijklmnopqrstuvwxyz0123456789!?:=,.-() #'*/";
 	int i;
-	for (i = 0; i < 256; i++) s_Transl[i] = 45;
-	for (i = 0; i < 50; i++) s_Transl[(unsigned char)c[i]] = i;
+	for (i = 0; i < 256; i++) transl[i] = 45;
+	for (i = 0; i < 50; i++) transl[(unsigned char)c[i]] = i;
 }

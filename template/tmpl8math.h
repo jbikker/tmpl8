@@ -1,6 +1,20 @@
 // Template, IGAD version 3
 // Get the latest version from: https://github.com/jbikker/tmpl8
-// IGAD/NHTV/UU - Jacco Bikker - 2006-2023
+// IGAD/NHTV/BUAS/UU - Jacco Bikker - 2006-2023
+
+// In this file: a basic, but quite complete set of math functionality.
+// Overview:
+// Line 27 - 120: Basic vector type definition. This covers all variants that
+//     are normally encountered during game / graphics development.
+// Line 128 - 540: Operations on the basic types. Based on NVIDIA's CUDA math
+//     library. Pretty complete but feel free to add your own operations.
+// Line 542 - 784: Matrix classes (2x2, 4x4) and operations on them.
+// Line 786 - 905: Quaternion class.
+// Line 907 - 961: Axis-aligned bounding box (AABB) class.
+
+// These math classes have been battle-tested in the Lighthouse 2 real-time
+// path tracing framework, as well as numerous other math-heavy projects, see
+// https://github.com/jbikker for examples.
 
 #pragma once
 
@@ -110,17 +124,6 @@ struct ALIGN( 4 ) uchar4
 }
 
 using namespace Tmpl8;
-
-// swap
-template <class T> void Swap( T& x, T& y ) { T t; t = x, x = y, y = t; }
-
-// random numbers
-uint InitSeed( uint seedBase );
-uint RandomUInt();
-uint RandomUInt( uint& seed );
-float RandomFloat();
-float RandomFloat( uint& seed );
-float Rand( float range );
 
 // math
 inline float fminf( const float a, const float b ) { return a < b ? a : b; }
@@ -431,11 +434,6 @@ inline uint2 max( const uint2& a, const uint2& b ) { return make_uint2( max( a.x
 inline uint3 max( const uint3& a, const uint3& b ) { return make_uint3( max( a.x, b.x ), max( a.y, b.y ), max( a.z, b.z ) ); }
 inline uint4 max( const uint4& a, const uint4& b ) { return make_uint4( max( a.x, b.x ), max( a.y, b.y ), max( a.z, b.z ), max( a.w, b.w ) ); }
 
-inline float lerp( float a, float b, float t ) { return a + t * (b - a); }
-inline float2 lerp( const float2& a, const float2& b, float t ) { return a + t * (b - a); }
-inline float3 lerp( const float3& a, const float3& b, float t ) { return a + t * (b - a); }
-inline float4 lerp( const float4& a, const float4& b, float t ) { return a + t * (b - a); }
-
 inline float clamp( float f, float a, float b ) { return fmaxf( a, fminf( f, b ) ); }
 inline int clamp( int f, int a, int b ) { return max( a, min( f, b ) ); }
 inline uint clamp( uint f, uint a, uint b ) { return max( a, min( f, b ) ); }
@@ -457,6 +455,32 @@ inline uint3 clamp( const uint3& v, uint a, uint b ) { return make_uint3( clamp(
 inline uint3 clamp( const uint3& v, const uint3& a, const uint3& b ) { return make_uint3( clamp( v.x, a.x, b.x ), clamp( v.y, a.y, b.y ), clamp( v.z, a.z, b.z ) ); }
 inline uint4 clamp( const uint4& v, uint a, uint b ) { return make_uint4( clamp( v.x, a, b ), clamp( v.y, a, b ), clamp( v.z, a, b ), clamp( v.w, a, b ) ); }
 inline uint4 clamp( const uint4& v, const uint4& a, const uint4& b ) { return make_uint4( clamp( v.x, a.x, b.x ), clamp( v.y, a.y, b.y ), clamp( v.z, a.z, b.z ), clamp( v.w, a.w, b.w ) ); }
+
+inline float lerp( const float a, const float b, const float t ) { return a + t * (b - a); }
+inline float2 lerp( const float2& a, const float2& b, float t ) { return a + t * (b - a); }
+inline float3 lerp( const float3& a, const float3& b, float t ) { return a + t * (b - a); }
+inline float4 lerp( const float4& a, const float4& b, float t ) { return a + t * (b - a); }
+
+inline float smoothstep( const float a, const float b, const float x )
+{
+	const float y = clamp( (x - a) / (b - a), 0.0f, 1.0f );
+	return (y * y * (3.0f - (2.0f * y)));
+}
+inline float2 smoothstep( const float2 a, const float2 b, const float2 x )
+{
+	const float2 y = clamp( (x - a) / (b - a), 0.0f, 1.0f );
+	return (y * y * (make_float2( 3.0f ) - (make_float2( 2.0f ) * y)));
+}
+inline float3 smoothstep( const float3 a, const float3 b, const float3 x )
+{
+	const float3 y = clamp( (x - a) / (b - a), 0.0f, 1.0f );
+	return (y * y * (make_float3( 3.0f ) - (make_float3( 2.0f ) * y)));
+}
+inline float4 smoothstep( const float4 a, const float4 b, const float4 x )
+{
+	const float4 y = clamp( (x - a) / (b - a), 0.0f, 1.0f );
+	return (y * y * (make_float4( 3.0f ) - (make_float4( 2.0f ) * y)));
+}
 
 inline float dot( const float2& a, const float2& b ) { return a.x * b.x + a.y * b.y; }
 inline float dot( const float3& a, const float3& b ) { return a.x * b.x + a.y * b.y + a.z * b.z; }
@@ -514,116 +538,6 @@ inline float3 fma( const  float3 a, const  float3 b, const float3 c ) { return f
 inline float4 fma( const  float4 a, const  float4 b, const float4 c ) { return float4( fmaf( a.x, b.x, c.x ), fmaf( a.y, b.y, c.y ), fmaf( a.z, b.z, c.z ), fmaf( a.w, b.w, c.w ) ); }
 
 inline float3 cross( const float3& a, const float3& b ) { return make_float3( a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x ); }
-
-inline float smoothstep( float a, float b, float x )
-{
-	float y = clamp( (x - a) / (b - a), 0.0f, 1.0f );
-	return (y * y * (3.0f - (2.0f * y)));
-}
-inline float2 smoothstep( float2 a, float2 b, float2 x )
-{
-	float2 y = clamp( (x - a) / (b - a), 0.0f, 1.0f );
-	return (y * y * (make_float2( 3.0f ) - (make_float2( 2.0f ) * y)));
-}
-inline float3 smoothstep( float3 a, float3 b, float3 x )
-{
-	float3 y = clamp( (x - a) / (b - a), 0.0f, 1.0f );
-	return (y * y * (make_float3( 3.0f ) - (make_float3( 2.0f ) * y)));
-}
-inline float4 smoothstep( float4 a, float4 b, float4 x )
-{
-	float4 y = clamp( (x - a) / (b - a), 0.0f, 1.0f );
-	return (y * y * (make_float4( 3.0f ) - (make_float4( 2.0f ) * y)));
-}
-
-inline float3 diffusereflection( const float3 N, uint& seed )
-{
-	float3 R;
-	do
-	{
-		R = make_float3( RandomFloat( seed ) * 2 - 1, RandomFloat( seed ) * 2 - 1, RandomFloat( seed ) * 2 - 1 );
-	} while (dot( R, R ) > 1);
-	if (dot( R, N ) < 0) R *= -1.0f;
-	return normalize( R );
-}
-
-inline float3 cosineweighteddiffusereflection( const float3 N, const float r0, const float r1 )
-{
-	// based on Global Illumination Compendium
-	float term1 = 6.28318531f * r0, term2 = sqrtf( 1 - r1 );
-	float3 R( cosf( term1 ) * term2, sinf( term1 ) * term2, sqrtf( r1 ) );
-	float3 tmp = (fabs( N.x ) > 0.99f) ? float3( 0, 1, 0 ) : float3( 1, 0, 0 );
-	float3 B = normalize( cross( N, tmp ) ), T = cross( B, N );
-	return R.x * T + R.y * B + R.z * N;
-}
-
-inline float3 cosineweighteddiffusereflection( const float3 N, uint& seed )
-{
-	// blog.demofox.org/2020/06/06/casual-shadertoy-path-tracing-2-image-improvement-and-glossy-reflections
-	float3 R;
-	do
-	{
-		R = make_float3( RandomFloat( seed ) * 2 - 1, RandomFloat( seed ) * 2 - 1, RandomFloat( seed ) * 2 - 1 );
-	} while (dot( R, R ) > 1);
-	return normalize( N + normalize( R ) );
-}
-
-// axis aligned bounding box class
-class aabb
-{
-public:
-	aabb() = default;
-	aabb( __m128 a, __m128 b ) { bmin4 = a, bmax4 = b; bmin[3] = bmax[3] = 0; }
-	aabb( float3 a, float3 b ) { bmin[0] = a.x, bmin[1] = a.y, bmin[2] = a.z, bmin[3] = 0, bmax[0] = b.x, bmax[1] = b.y, bmax[2] = b.z, bmax[3] = 0; }
-	__inline void Reset() { bmin4 = _mm_set_ps1( 1e34f ), bmax4 = _mm_set_ps1( -1e34f ); }
-	bool Contains( const __m128& p ) const
-	{
-		union { __m128 va4; float va[4]; };
-		union { __m128 vb4; float vb[4]; };
-		va4 = _mm_sub_ps( p, bmin4 ), vb4 = _mm_sub_ps( bmax4, p );
-		return ((va[0] >= 0) && (va[1] >= 0) && (va[2] >= 0) &&
-			(vb[0] >= 0) && (vb[1] >= 0) && (vb[2] >= 0));
-	}
-	__inline void Grow( const aabb& bb ) { bmin4 = _mm_min_ps( bmin4, bb.bmin4 ); bmax4 = _mm_max_ps( bmax4, bb.bmax4 ); }
-	__inline void Grow( const __m128& p ) { bmin4 = _mm_min_ps( bmin4, p ); bmax4 = _mm_max_ps( bmax4, p ); }
-	__inline void Grow( const __m128 min4, const __m128 max4 ) { bmin4 = _mm_min_ps( bmin4, min4 ); bmax4 = _mm_max_ps( bmax4, max4 ); }
-	__inline void Grow( const float3& p ) { __m128 p4 = _mm_setr_ps( p.x, p.y, p.z, 0 ); Grow( p4 ); }
-	aabb Union( const aabb& bb ) const { aabb r; r.bmin4 = _mm_min_ps( bmin4, bb.bmin4 ), r.bmax4 = _mm_max_ps( bmax4, bb.bmax4 ); return r; }
-	static aabb Union( const aabb& a, const aabb& b ) { aabb r; r.bmin4 = _mm_min_ps( a.bmin4, b.bmin4 ), r.bmax4 = _mm_max_ps( a.bmax4, b.bmax4 ); return r; }
-	aabb Intersection( const aabb& bb ) const { aabb r; r.bmin4 = _mm_max_ps( bmin4, bb.bmin4 ), r.bmax4 = _mm_min_ps( bmax4, bb.bmax4 ); return r; }
-	__inline float Extend( const int axis ) const { return bmax[axis] - bmin[axis]; }
-	__inline float Minimum( const int axis ) const { return bmin[axis]; }
-	__inline float Maximum( const int axis ) const { return bmax[axis]; }
-	float Area() const
-	{
-		union { __m128 e4; float e[4]; };
-		e4 = _mm_sub_ps( bmax4, bmin4 );
-		return max( 0.0f, e[0] * e[1] + e[0] * e[2] + e[1] * e[2] );
-	}
-	int LongestAxis() const
-	{
-		int a = 0;
-		if (Extend( 1 ) > Extend( 0 )) a = 1;
-		if (Extend( 2 ) > Extend( a )) a = 2;
-		return a;
-	}
-	// data members
-#pragma warning ( push )
-#pragma warning ( disable: 4201 /* nameless struct / union */ )
-	union
-	{
-		struct
-		{
-			union { __m128 bmin4; float bmin[4]; struct { float3 bmin3; }; };
-			union { __m128 bmax4; float bmax[4]; struct { float3 bmax3; }; };
-		};
-		__m128 bounds[2] = { _mm_setr_ps( 1e34f, 1e34f, 1e34f, 0 ), _mm_setr_ps( -1e34f, -1e34f, -1e34f, 0 ) };
-	};
-#pragma warning ( push )
-	__inline void SetBounds( const __m128 min4, const __m128 max4 ) { bmin4 = min4; bmax4 = max4; }
-	__inline __m128 Center() const { return _mm_mul_ps( _mm_add_ps( bmin4, bmax4 ), _mm_set_ps1( 0.5f ) ); }
-	__inline float Center( uint axis ) const { return (bmin[axis] + bmax[axis]) * 0.5f; }
-};
 
 // matrix classes
 class mat2
@@ -869,11 +783,6 @@ inline void operator+=( mat2& a, const mat2& b ) { for (int i = 0; i < 4; i++) a
 inline mat2 operator-( const mat2& a, const mat2& b ) { return mat2( a.cell[0] - b.cell[0], a.cell[1] - b.cell[1], a.cell[2] - b.cell[2], a.cell[3] - b.cell[3] ); }
 inline void operator-=( mat2& a, const mat2& b ) { for (int i = 0; i < 4; i++) a.cell[i] -= b.cell[i]; }
 
-float3 TransformPosition( const float3& a, const mat4& M );
-float3 TransformVector( const float3& a, const mat4& M );
-float3 TransformPosition_SSE( const __m128& a, const mat4& M );
-float3 TransformVector_SSE( const __m128& a, const mat4& M );
-
 class quat // based on https://github.com/adafruit
 {
 public:
@@ -994,6 +903,80 @@ public:
 	quat scale( float s ) const { return quat( w * s, x * s, y * s, z * s ); }
 	float w = 1, x = 0, y = 0, z = 0;
 };
+
+// axis aligned bounding box class
+class aabb
+{
+public:
+	aabb() = default;
+	aabb( __m128 a, __m128 b ) { bmin4 = a, bmax4 = b; bmin[3] = bmax[3] = 0; }
+	aabb( float3 a, float3 b ) { bmin[0] = a.x, bmin[1] = a.y, bmin[2] = a.z, bmin[3] = 0, bmax[0] = b.x, bmax[1] = b.y, bmax[2] = b.z, bmax[3] = 0; }
+	__inline void Reset() { bmin4 = _mm_set_ps1( 1e34f ), bmax4 = _mm_set_ps1( -1e34f ); }
+	bool Contains( const __m128& p ) const
+	{
+		union { __m128 va4; float va[4]; };
+		union { __m128 vb4; float vb[4]; };
+		va4 = _mm_sub_ps( p, bmin4 ), vb4 = _mm_sub_ps( bmax4, p );
+		return ((va[0] >= 0) && (va[1] >= 0) && (va[2] >= 0) &&
+			(vb[0] >= 0) && (vb[1] >= 0) && (vb[2] >= 0));
+	}
+	__inline void Grow( const aabb& bb ) { bmin4 = _mm_min_ps( bmin4, bb.bmin4 ); bmax4 = _mm_max_ps( bmax4, bb.bmax4 ); }
+	__inline void Grow( const __m128& p ) { bmin4 = _mm_min_ps( bmin4, p ); bmax4 = _mm_max_ps( bmax4, p ); }
+	__inline void Grow( const __m128 min4, const __m128 max4 ) { bmin4 = _mm_min_ps( bmin4, min4 ); bmax4 = _mm_max_ps( bmax4, max4 ); }
+	__inline void Grow( const float3& p ) { __m128 p4 = _mm_setr_ps( p.x, p.y, p.z, 0 ); Grow( p4 ); }
+	aabb Union( const aabb& bb ) const { aabb r; r.bmin4 = _mm_min_ps( bmin4, bb.bmin4 ), r.bmax4 = _mm_max_ps( bmax4, bb.bmax4 ); return r; }
+	static aabb Union( const aabb& a, const aabb& b ) { aabb r; r.bmin4 = _mm_min_ps( a.bmin4, b.bmin4 ), r.bmax4 = _mm_max_ps( a.bmax4, b.bmax4 ); return r; }
+	aabb Intersection( const aabb& bb ) const { aabb r; r.bmin4 = _mm_max_ps( bmin4, bb.bmin4 ), r.bmax4 = _mm_min_ps( bmax4, bb.bmax4 ); return r; }
+	__inline float Extend( const int axis ) const { return bmax[axis] - bmin[axis]; }
+	__inline float Minimum( const int axis ) const { return bmin[axis]; }
+	__inline float Maximum( const int axis ) const { return bmax[axis]; }
+	float Area() const
+	{
+		union { __m128 e4; float e[4]; };
+		e4 = _mm_sub_ps( bmax4, bmin4 );
+		return max( 0.0f, e[0] * e[1] + e[0] * e[2] + e[1] * e[2] );
+	}
+	int LongestAxis() const
+	{
+		int a = 0;
+		if (Extend( 1 ) > Extend( 0 )) a = 1;
+		if (Extend( 2 ) > Extend( a )) a = 2;
+		return a;
+	}
+	// data members
+#pragma warning ( push )
+#pragma warning ( disable: 4201 /* nameless struct / union */ )
+	union
+	{
+		struct
+		{
+			union { __m128 bmin4; float bmin[4]; struct { float3 bmin3; }; };
+			union { __m128 bmax4; float bmax[4]; struct { float3 bmax3; }; };
+		};
+		__m128 bounds[2] = { _mm_setr_ps( 1e34f, 1e34f, 1e34f, 0 ), _mm_setr_ps( -1e34f, -1e34f, -1e34f, 0 ) };
+	};
+#pragma warning ( pop )
+	__inline void SetBounds( const __m128 min4, const __m128 max4 ) { bmin4 = min4; bmax4 = max4; }
+	__inline __m128 Center() const { return _mm_mul_ps( _mm_add_ps( bmin4, bmax4 ), _mm_set_ps1( 0.5f ) ); }
+	__inline float Center( uint axis ) const { return (bmin[axis] + bmax[axis]) * 0.5f; }
+};
+
+// matrix / vector multiplication
+float3 TransformPosition( const float3& a, const mat4& M );
+float3 TransformVector( const float3& a, const mat4& M );
+float3 TransformPosition_SSE( const __m128& a, const mat4& M );
+float3 TransformVector_SSE( const __m128& a, const mat4& M );
+
+// generic swap
+template <class T> void Swap( T& x, T& y ) { T t; t = x, x = y, y = t; }
+
+// random numbers
+uint InitSeed( uint seedBase );
+uint RandomUInt();
+uint RandomUInt( uint& seed );
+float RandomFloat();
+float RandomFloat( uint& seed );
+float Rand( float range );
 
 // Perlin noise
 float noise2D( const float x, const float y );

@@ -1,6 +1,6 @@
 // Template, IGAD version 3
 // Get the latest version from: https://github.com/jbikker/tmpl8
-// IGAD/NHTV/UU - Jacco Bikker - 2006-2023
+// IGAD/NHTV/BUAS/UU - Jacco Bikker - 2006-2023
 
 #include "precomp.h"
 #include "game.h"
@@ -361,7 +361,8 @@ void main()
 DWORD JobThreadProc( LPVOID lpParameter )
 {
 	JobThread* JobThreadInstance = (JobThread*)lpParameter;
-	JobThreadInstance->BackgroundTask();
+	if (JobThreadInstance /* just here to avoid 'unreachable code' warning */)
+		JobThreadInstance->BackgroundTask();
 	return 0;
 }
 
