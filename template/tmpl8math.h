@@ -95,6 +95,8 @@ struct ALIGN( 16 ) float4
 	float4( const float a ) : x( a ), y( a ), z( a ), w( a ) {}
 	float4( const float3 & a, const float d );
 	float4( const float3 & a );
+	float4( const uint4 a ) : x( (float)a.x ), y( (float)a.y ), z( (float)a.z ), w( (float)a.w ) {}
+	float4( const int4 a ) : x( (float)a.x ), y( (float)a.y ), z( (float)a.z ), w( (float)a.w ) {}
 	union { struct { float x, y, z, w; }; float cell[4]; };
 	float& operator [] ( const int n ) { return cell[n]; }
 };
@@ -105,6 +107,9 @@ struct float3
 	float3( const float a ) : x( a ), y( a ), z( a ) {}
 	float3( const float4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
 	float3( const uint3 a ) : x( (float)a.x ), y( (float)a.y ), z( (float)a.z ) {}
+	float3( const int3 a ) : x( (float)a.x ), y( (float)a.y ), z( (float)a.z ) {}
+	float3( const uint4 a ) : x( (float)a.x ), y( (float)a.y ), z( (float)a.z ) {}
+	float3( const int4 a ) : x( (float)a.x ), y( (float)a.y ), z( (float)a.z ) {}
 	float2 xy() { return float2( x, y ); }
 	float2 yz() { return float2( y, z ); }
 	union { struct { float x, y, z; }; float cell[3]; };
@@ -515,6 +520,10 @@ inline float2 floorf( const float2& v ) { return make_float2( floorf( v.x ), flo
 inline float3 floorf( const float3& v ) { return make_float3( floorf( v.x ), floorf( v.y ), floorf( v.z ) ); }
 inline float4 floorf( const float4& v ) { return make_float4( floorf( v.x ), floorf( v.y ), floorf( v.z ), floorf( v.w ) ); }
 
+inline float2 ceilf( const float2& v ) { return make_float2( ceilf( v.x ), ceilf( v.y ) ); }
+inline float3 ceilf( const float3& v ) { return make_float3( ceilf( v.x ), ceilf( v.y ), ceilf( v.z ) ); }
+inline float4 ceilf( const float4& v ) { return make_float4( ceilf( v.x ), ceilf( v.y ), ceilf( v.z ), ceilf( v.w ) ); }
+
 inline float fracf( float v ) { return v - floorf( v ); }
 inline float2 fracf( const float2& v ) { return make_float2( fracf( v.x ), fracf( v.y ) ); }
 inline float3 fracf( const float3& v ) { return make_float3( fracf( v.x ), fracf( v.y ), fracf( v.z ) ); }
@@ -783,6 +792,11 @@ inline void operator+=( mat2& a, const mat2& b ) { for (int i = 0; i < 4; i++) a
 inline mat2 operator-( const mat2& a, const mat2& b ) { return mat2( a.cell[0] - b.cell[0], a.cell[1] - b.cell[1], a.cell[2] - b.cell[2], a.cell[3] - b.cell[3] ); }
 inline void operator-=( mat2& a, const mat2& b ) { for (int i = 0; i < 4; i++) a.cell[i] -= b.cell[i]; }
 
+float3 TransformPosition( const float3& a, const mat4& M );
+float3 TransformVector( const float3& a, const mat4& M );
+float3 TransformPosition_SSE( const __m128& a, const mat4& M );
+float3 TransformVector_SSE( const __m128& a, const mat4& M );
+
 class quat // based on https://github.com/adafruit
 {
 public:
@@ -980,3 +994,4 @@ float Rand( float range );
 
 // Perlin noise
 float noise2D( const float x, const float y );
+float noise3D( const float x, const float y, const float z );

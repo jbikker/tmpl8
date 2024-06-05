@@ -14,7 +14,7 @@ public:
 	Buffer( unsigned int N, void* ptr = 0, unsigned int t = DEFAULT );
 	~Buffer();
 	cl_mem* GetDevicePtr() { return &deviceBuffer; }
-	unsigned int* GetHostPtr() { return hostBuffer; }
+	unsigned int* GetHostPtr();
 	void CopyToDevice( bool blocking = true );
 	void CopyToDevice2( bool blocking, cl_event* e = 0, const size_t s = 0 );
 	void CopyFromDevice( bool blocking = true );

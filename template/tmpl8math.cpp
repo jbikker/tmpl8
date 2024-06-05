@@ -107,6 +107,30 @@ float noise2D( const float x, const float y )
 	return total / frequency;
 }
 
+float noise3D( const float x, const float y, const float z )
+{
+	float noise = 0.0f;
+	float frequency = 5; // (float)(2 << numOctaves);
+	float amplitude = 0.5f / 6.0f;
+	for (int i = 0; i < numOctaves; ++i)
+	{
+		// get all permutations of noise for each individual axis
+		const float noiseXY = InterpolatedNoise( i, x * frequency, y * frequency );
+		const float noiseXZ = InterpolatedNoise( i, x * frequency, z * frequency );
+		const float noiseYZ = InterpolatedNoise( i, y * frequency, z * frequency );
+		// reverse of the permutations of noise for each individual axis
+		const float noiseYX = InterpolatedNoise( i, y * frequency, x * frequency );
+		const float noiseZX = InterpolatedNoise( i, z * frequency, x * frequency );
+		const float noiseZY = InterpolatedNoise( i, z * frequency, y * frequency );
+		// use the average of the noise functions
+		noise += (noiseXY + noiseXZ + noiseYZ + noiseYX + noiseZX + noiseZY) * amplitude;
+		amplitude *= persistence;
+		frequency *= 2.0f;
+	}
+	// use the average of all octaves
+	return noise;
+}
+
 // math implementations
 float4::float4( const float3& a, const float d )
 {

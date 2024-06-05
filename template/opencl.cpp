@@ -185,6 +185,19 @@ Buffer::~Buffer()
 	if ((type & (TEXTURE | TARGET)) == 0) clReleaseMemObject( deviceBuffer );
 }
 
+// GetHostPtr method
+// ----------------------------------------------------------------------------
+unsigned int* Buffer::GetHostPtr()
+{
+	if (!hostBuffer)
+	{
+		hostBuffer = (uint*)MALLOC64( size );
+		ownData = true;
+		aligned = true;
+	}
+	return hostBuffer;
+}
+
 // CopyToDevice method
 // ----------------------------------------------------------------------------
 void Buffer::CopyToDevice( bool blocking )
