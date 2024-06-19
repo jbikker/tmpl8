@@ -22,25 +22,34 @@ void Game::Tick( float /* deltaTime */ )
 	// demonstration purposes. See _ getting started.pdf for details.
 
 	// clear the screen to black
-	screen->Clear( 0 );
-	// print something to the console window
-	printf( "hello world!\n" );
-	// plot some colors
-	for (int red = 0; red < 256; red++) for (int green = 0; green < 256; green++)
-	{
-		int x = red, y = green;
-		screen->Plot( x + 200, y + 100, (red << 16) + (green << 8) );
-	}
-	// plot a white pixel in the bottom right corner
-	screen->Plot( SCRWIDTH - 2, SCRHEIGHT - 2, 0xffffff );
+	screen->Clear( 0xff );
+
 	//  draw a sprite
 	static Sprite rotatingGun( new Surface( "assets/aagun.tga" ), 36 );
 	static int frame = 0;
-	rotatingGun.SetFrame( frame );
-	rotatingGun.Draw( screen, SCRWIDTH - 20, 1 );
-	rotatingGun.Draw( screen, SCRWIDTH - 35, 50 );
-	rotatingGun.Draw( screen, SCRWIDTH - 50, 100 );
-	screen->Bar( SCRWIDTH - 50, 50, SCRWIDTH + 50, 300, 0xff0000 );
-	if (++frame == 36) frame = 0;
-	Sleep( 50 ); // otherwise it will be too fast!
+	rotatingGun.SetFrame( ++frame % 36 );
+	rotatingGun.Draw( screen, 800, 150 );
+
+	// print something to the console window
+	printf( "frame: %i, hello world!\n", frame );
+
+	// print something to the graphics window
+	screen->Print( "cpu code", 210, 365, 0xffffff );
+	screen->Print( "gpu code", 510, 365, 0xffffff );
+
+	// plot some colors
+	for (int x = 0; x < 256; x++) for (int y = 0; y < 256; y++)
+	{
+		int red = (x & 15) << 4, green = (y & 15) << 4;
+		screen->Plot( x + 200, y + 100, (red << 16) + (green << 8) );
+	}
+	
+	// run some OpenCL code
+	static Kernel kernel( "cl/kernels.cl", "render" );
+	static Surface image( 256, 256 );
+	static Buffer buffer( 256 * 256 * 4, image.pixels );
+	kernel.SetArguments( &buffer, frame );
+	kernel.Run( 256 * 256 );
+	buffer.CopyFromDevice();
+	image.CopyTo( screen, 500, 100 );
 }

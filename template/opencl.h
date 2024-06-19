@@ -163,7 +163,6 @@ public:
 private:
 	void SetArgument( int idx, cl_mem* buffer );
 	void SetArgument( int idx, Buffer* buffer );
-	void SetArgument( int idx, Buffer& buffer );
 	void SetArgument( int idx, float );
 	void SetArgument( int idx, int );
 	void SetArgument( int idx, float2 );

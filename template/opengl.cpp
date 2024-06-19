@@ -70,7 +70,7 @@ void DrawQuad()
 		static const GLfloat verts_igp[] = { 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0 };
 		static const GLfloat uvdata_igp[] = { -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, 1, 1 };
 		GLuint vertexBuffer, UVBuffer;
-		if (IGP_detected)
+		if (1) // IGP_detected)
 		{
 			// not sure why it is needed - without it IGPs tile and clamp the output.
 			vertexBuffer = CreateVBO( verts_igp, sizeof( verts_igp ) );
@@ -88,6 +88,7 @@ void DrawQuad()
 		glBindVertexArray( 0 );
 		CheckGL();
 	}
+	glViewport( 0, 0, SCRWIDTH, SCRHEIGHT );
 	glBindVertexArray( vao );
 	glDrawArrays( GL_TRIANGLES, 0, 6 );
 	glBindVertexArray( 0 );

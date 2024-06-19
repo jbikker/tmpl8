@@ -122,7 +122,7 @@ static cl_int getPlatformID( cl_platform_id* platform )
 	clPlatformIDs = (cl_platform_id*)malloc( num_platforms * sizeof( cl_platform_id ) );
 	error = clGetPlatformIDs( num_platforms, clPlatformIDs, NULL );
 	cl_uint deviceType[2] = { CL_DEVICE_TYPE_GPU, CL_DEVICE_TYPE_CPU };
-	char* deviceOrder[2][3] = { { "NVIDIA", "AMD", "" }, { "", "", "" } };
+	const char* deviceOrder[2][3] = { { "NVIDIA", "AMD", "" }, { "", "", "" } };
 	printf( "available OpenCL platforms:\n" );
 	for (cl_uint i = 0; i < num_platforms; ++i)
 	{
@@ -203,6 +203,12 @@ unsigned int* Buffer::GetHostPtr()
 void Buffer::CopyToDevice( bool blocking )
 {
 	cl_int error;
+	if (!hostBuffer)
+	{
+		hostBuffer = (uint*)MALLOC64( size );
+		ownData = true;
+		aligned = true;
+	}
 	CHECKCL( error = clEnqueueWriteBuffer( Kernel::GetQueue(), deviceBuffer, blocking, 0, size, hostBuffer, 0, 0, 0 ) );
 }
 
@@ -314,9 +320,8 @@ Kernel::Kernel( char* file, char* entryPoint )
 	// -cl-nv-maxrregcount=64 not faster than leaving it out (same for 128)
 	// -cl-no-subgroup-ifp ? fails on nvidia.
 #if 1
-	// AMD compatible compilation, thanks Jasper the Winther
+	// AMD-compatible compilation, thanks Rosalie de Winther
 	error = clBuildProgram( program, 0, NULL, "-cl-fast-relaxed-math -cl-mad-enable -cl-single-precision-constant", NULL, NULL );
-
 #else
 	error = clBuildProgram( program, 0, NULL, "-cl-nv-verbose -cl-fast-relaxed-math -cl-mad-enable -cl-single-precision-constant", NULL, NULL );
 #endif
@@ -573,10 +578,11 @@ bool Kernel::InitCL()
 		printf( "identification failed.\n" );
 	}
 	// create a command-queue
-	queue = clCreateCommandQueue( context, devices[deviceUsed], CL_QUEUE_PROFILING_ENABLE, &error );
+	cl_queue_properties props[] = { 0 };
+	queue = clCreateCommandQueueWithProperties( context, devices[deviceUsed], props, &error );
 	if (!CHECKCL( error )) return false;
 	// create a second command queue for asynchronous copies
-	queue2 = clCreateCommandQueue( context, devices[deviceUsed], CL_QUEUE_PROFILING_ENABLE, &error );
+	queue2 = clCreateCommandQueueWithProperties( context, devices[deviceUsed], props, &error );
 	if (!CHECKCL( error )) return false;
 	// cleanup
 	delete devices;
@@ -603,7 +609,6 @@ void Kernel::CheckCLStarted()
 
 // SetArgument methods
 // ----------------------------------------------------------------------------
-void Kernel::SetArgument( int idx, cl_mem* buffer ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( cl_mem ), buffer ); }
 void Kernel::SetArgument( int idx, Buffer* buffer )
 {
 	CheckCLStarted();
@@ -614,12 +619,12 @@ void Kernel::SetArgument( int idx, Buffer* buffer )
 		acqBuffer = buffer;
 	}
 }
-void Kernel::SetArgument( int idx, Buffer& buffer ) { SetArgument( idx, &buffer ); }
 void Kernel::SetArgument( int idx, int value ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( int ), &value ); }
 void Kernel::SetArgument( int idx, float value ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( float ), &value ); }
 void Kernel::SetArgument( int idx, float2 value ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( float2 ), &value ); }
 void Kernel::SetArgument( int idx, float3 value ) { CheckCLStarted(); float4 tmp( value, 0 ); clSetKernelArg( kernel, idx, sizeof( float4 ), &tmp ); }
 void Kernel::SetArgument( int idx, float4 value ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( float4 ), &value ); }
+void Kernel::SetArgument( int idx, cl_mem* buffer ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( cl_mem ), buffer ); }
 
 // Run method
 // ----------------------------------------------------------------------------

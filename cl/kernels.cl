@@ -3,11 +3,9 @@
 
 __kernel void render( __global uint* pixels, const int offset )
 {
-	// plot a pixel to outimg
+	// plot a pixel to a buffer
 	const int p = get_global_id( 0 );
-	const int x = p % 511, red = x / 2 + offset;
-	const int y = p / 512, green = y / 2;
-	pixels[x + y * 512] = (red << 16) + (green << 8);
+	pixels[p] = (p + offset) << 8;
 }
 
 // EOF
