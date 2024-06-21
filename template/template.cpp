@@ -205,8 +205,8 @@ void main()
 #if 1
 	// basic shader, no gamma correction
 	Shader* shader = new Shader(
-		"#version 330\nin vec4 p;\nin vec2 t;out vec2 u;void main(){u=t;gl_Position=p;}",
-		"#version 330\nuniform sampler2D c;in vec2 u;out vec4 f;void main(){f=/*sqrt*/(texture(c,u));}", true );
+		"#version 330\nin vec4 p;\nout vec2 u;void main(){u=vec2((p.x+1)/2,1-(p.y+1)/2);gl_Position=vec4(p.x,p.y,1,1);}",
+		"#version 330\nuniform sampler2D c;in vec2 u;out vec4 f;void main(){f=texture(c,u);}", true );
 #else
 	// fxaa shader
 	Shader* shader = new Shader(

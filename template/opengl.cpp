@@ -65,26 +65,20 @@ void DrawQuad()
 	if (!vao)
 	{
 		// generate buffers
-		static const GLfloat verts[] = { -1, 1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, -1, 0, 1, -1, 0 };
-		static const GLfloat uvdata[] = { 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1 };
-		static const GLfloat verts_igp[] = { 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0 };
-		static const GLfloat uvdata_igp[] = { -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, 1, 1 };
-		GLuint vertexBuffer, UVBuffer;
-		if (1) // IGP_detected)
-		{
-			// not sure why it is needed - without it IGPs tile and clamp the output.
-			vertexBuffer = CreateVBO( verts_igp, sizeof( verts_igp ) );
-			UVBuffer = CreateVBO( uvdata_igp, sizeof( uvdata_igp ) );
-		}
-		else
-		{
-			vertexBuffer = CreateVBO( verts, sizeof( verts ) );
-			UVBuffer = CreateVBO( uvdata, sizeof( uvdata ) );
-		}
+		static const GLfloat verts[] = { 
+			-1, 1, 
+			1, 1, 
+			-1, -1, 
+			1, 1, 
+			-1, -1, 
+			1, -1 
+		};
+		GLuint vbo = CreateVBO( verts, sizeof( verts ) );
 		glGenVertexArrays( 1, &vao );
-		glBindVertexArray( vao );
-		BindVBO( 0, 3, vertexBuffer );
-		BindVBO( 1, 2, UVBuffer );
+		glBindVertexArray( vbo );
+		glEnableVertexAttribArray( 0 );
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 		glBindVertexArray( 0 );
 		CheckGL();
 	}
