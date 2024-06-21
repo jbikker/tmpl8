@@ -65,20 +65,13 @@ void DrawQuad()
 	if (!vao)
 	{
 		// generate buffers
-		static const GLfloat verts[] = { 
-			-1, 1, 
-			1, 1, 
-			-1, -1, 
-			1, 1, 
-			-1, -1, 
-			1, -1 
-		};
+		static const GLfloat verts[] = { -1, 1, 1, 1, -1, -1, 1, 1, -1, -1, 1, -1 };
 		GLuint vbo = CreateVBO( verts, sizeof( verts ) );
 		glGenVertexArrays( 1, &vao );
 		glBindVertexArray( vbo );
 		glEnableVertexAttribArray( 0 );
-		glBindBuffer(GL_ARRAY_BUFFER, vbo);
-		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+		glBindBuffer( GL_ARRAY_BUFFER, vbo );
+		glVertexAttribPointer( 0, 2, GL_FLOAT, GL_FALSE, 0, NULL );
 		glBindVertexArray( 0 );
 		CheckGL();
 	}
@@ -91,8 +84,7 @@ void DrawQuad()
 // OpenGL texture wrapper class
 GLTexture::GLTexture( uint w, uint h, uint type )
 {
-	width = w;
-	height = h;
+	width = w, height = h;
 	glGenTextures( 1, &ID );
 	glBindTexture( GL_TEXTURE_2D, ID );
 	if (type == DEFAULT)

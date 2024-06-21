@@ -30,8 +30,8 @@ Sprite::~Sprite()
 // draw sprite to target surface
 void Sprite::Draw( Surface* target, int x, int y )
 {
-	if (x < -width || x > ( target->width + width )) return;
-	if (y < -height || y > ( target->height + height )) return;
+	if (x < -width || x >( target->width + width )) return;
+	if (y < -height || y >( target->height + height )) return;
 	int x1 = x, x2 = x + width;
 	int y1 = y, y2 = y + height;
 	uint* src = GetBuffer() + currentFrame * width;

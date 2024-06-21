@@ -246,13 +246,8 @@ void Buffer::CopyTo( Buffer* buffer )
 void Buffer::Clear()
 {
 	uint value = 0;
-#if 0
-	memset( hostBuffer, 0, size );
-	CopyToDevice();
-#else
 	cl_int error;
 	CHECKCL( error = clEnqueueFillBuffer( Kernel::GetQueue(), deviceBuffer, &value, 4, 0, size, 0, 0, 0 ) );
-#endif
 }
 
 // Kernel constructor
@@ -272,45 +267,7 @@ Kernel::Kernel( char* file, char* entryPoint )
 	if (isAmpere) csText = "#define ISAMPERE\n" + csText, vendorLines++;
 	if (isTuring) csText = "#define ISTURING\n" + csText, vendorLines++;
 	if (isPascal) csText = "#define ISPASCAL\n" + csText, vendorLines++;
-	// expand #include directives: cl compiler doesn't support these natively
-	// warning: this simple system does not handle nested includes.
-	struct Include { int start, end; string file; } includes[64];
-	int Ninc = 0;
-#if 0 // needed for NVIDIA OpenCL 1.0; this no longer is necessary
-	while (1)
-	{
-		// see if any #includes remain
-		size_t pos = csText.find( "#include" );
-		if (pos == string::npos) break;
-		// start of expanded source construction
-		string tmp;
-		if (pos > 0)
-			tmp = csText.substr( 0, pos - 1 ) + "\n",
-			includes[Ninc].start = LineCount( tmp ); // record first line of #include content
-		else
-			includes[Ninc].start = 0;
-		// parse filename of include file
-		pos = csText.find( "\"", pos + 1 );
-		if (pos == string::npos) FatalError( "Expected \" after #include in shader." );
-		size_t end = csText.find( "\"", pos + 1 );
-		if (end == string::npos) FatalError( "Expected second \" after #include in shader." );
-		string file = csText.substr( pos + 1, end - pos - 1 );
-		// load include file content
-		string incText = TextFileRead( file.c_str() );
-		includes[Ninc].end = includes[Ninc].start + LineCount( incText );
-		includes[Ninc++].file = file;
-		if (incText.size() == 0) FatalError( "#include file not found:\n%s", file.c_str() );
-		// cleanup include file content: we get some crap first sometimes, but why?
-		int firstValidChar = 0;
-		while (incText[firstValidChar] < 0) firstValidChar++;
-		// add include file content and remainder of source to expanded source string
-		tmp += incText.substr( firstValidChar, string::npos );
-		tmp += csText.substr( end + 1, string::npos ) + "\n";
-		// repeat until no #includes left
-		csText = tmp;
-	}
-#endif
-	// attempt to compile the loaded and expanded source text
+	// attempt to compile the loaded source text
 	const char* source = csText.c_str();
 	size_t size = strlen( source );
 	cl_int error;
@@ -355,58 +312,9 @@ Kernel::Kernel( char* file, char* entryPoint )
 		FILE* f = fopen( "errorlog.txt", "wb" );
 		fwrite( log, 1, size, f );
 		fclose( f );
-		// find and display the first error. Note: platform specific sadly; code below is for NVIDIA
-		char* errorString = strstr( log, ": error:" );
-		if (errorString)
-		{
-			int errorPos = (int)(errorString - log);
-			while (errorPos > 0) if (log[errorPos - 1] == '\n') break; else errorPos--;
-			// translate file and line number of error and report
-			log[errorPos + 2048] = 0;
-			int lineNr = 0, linePos = 0;
-			char* lns = strstr( log + errorPos, ">:" ), * eol;
-			if (!lns) FatalError( log + errorPos ); else
-			{
-				lns += 2;
-				while (*lns >= '0' && *lns <= '9') lineNr = lineNr * 10 + (*lns++ - '0');
-				lns++; // proceed to line number
-				while (*lns >= '0' && *lns <= '9') linePos = linePos * 10 + (*lns++ - '0');
-				lns += 9; // proceed to error message
-				eol = lns;
-				while (*eol != '\n' && *eol > 0) eol++;
-				*eol = 0;
-				lineNr--; // we count from 0 instead of 1
-				// adjust file and linenr based on include file data
-				string errorFile = file;
-				bool errorInInclude = false;
-				for (int i = Ninc - 1; i >= 0; i--)
-				{
-					if (lineNr > includes[i].end)
-					{
-						for (int j = 0; j <= i; j++) lineNr -= includes[j].end - includes[j].start;
-						break;
-					}
-					else if (lineNr > includes[i].start)
-					{
-						errorFile = includes[i].file;
-						lineNr -= includes[i].start;
-						errorInInclude = true;
-						break;
-					}
-				}
-				if (!errorInInclude) lineNr -= vendorLines;
-				// present error message
-				char t[1024];
-				sprintf( t, "file %s, line %i, pos %i:\n%s", errorFile.c_str(), lineNr + 1, linePos, lns );
-				FatalError( t, "Build error" );
-			}
-		}
-		else
-		{
-			// error string has unknown format; just dump it to a window
-			log[2048] = 0; // truncate very long logs
-			FatalError( log, "Build error" );
-		}
+		// find and display the first errormat; just dump it to a window
+		log[2048] = 0; // truncate very long logs
+		FatalError( log, "Build error" );
 	}
 	kernel = clCreateKernel( program, entryPoint, &error );
 	if (kernel == 0) FatalError( "clCreateKernel failed: entry point not found." );

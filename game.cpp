@@ -43,7 +43,7 @@ void Game::Tick( float /* deltaTime */ )
 		int red = (x & 15) << 4, green = (y & 15) << 4;
 		screen->Plot( x + 200, y + 100, (red << 16) + (green << 8) );
 	}
-	
+
 	// run some OpenCL code
 	static Kernel kernel( "cl/kernels.cl", "render" );
 	static Surface image( 256, 256 );
