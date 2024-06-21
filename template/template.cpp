@@ -199,7 +199,7 @@ void main()
 	memcpy( sw + 9, swt, strlen( swt ) );
 	memcpy( sh + 10, sht, strlen( sht ) );
 	Shader* shader = new Shader(
-		"#version 330\nin vec4 p;\nin vec2 t;out vec2 uv;void main(){uv=t;gl_Position=p;}",
+		"#version 330\nin vec4 p;\nout vec2 uv;void main(){uv=vec2((p.x+1)/2,1-(p.y+1)/2);gl_Position=vec4(p.x,p.y,1,1);}",
 		fs, true );
 #else
 #if 1
@@ -210,7 +210,7 @@ void main()
 #else
 	// fxaa shader
 	Shader* shader = new Shader(
-		"#version 330\nin vec4 p;\nin vec2 t;out vec2 uv;void main(){uv=t;gl_Position=p;}",
+		"#version 330\nin vec4 p;\nout vec2 uv;void main(){uv=vec2((p.x+1)/2,1-(p.y+1)/2);gl_Position=vec4(p.x,p.y,1,1);}",
 		// FXAA 3.11 Implementation - effendiian
 		// https://www.shadertoy.com/view/ttXGzn
 		"#version 330\nuniform sampler2D tex;\nin vec2 uv;out vec4 f; \n"							\
