@@ -55,14 +55,8 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="README.md">
-      <Filter>template</Filter>
-    </None>
     <None Include="cl\kernels.cl">
       <Filter>kernels</Filter>
-    </None>
-    <None Include="template\LICENSE">
-      <Filter>template</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>

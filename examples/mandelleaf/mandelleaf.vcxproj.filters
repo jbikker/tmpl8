@@ -52,12 +52,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="template\LICENSE">
-      <Filter>template</Filter>
-    </None>
-    <None Include="README.md">
-      <Filter>template</Filter>
-    </None>
     <None Include="cl\program.cl">
       <Filter>template\cl</Filter>
     </None>

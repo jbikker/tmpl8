@@ -152,8 +152,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="cl\kernels.cl" />
-    <None Include="README.md" />
-    <None Include="template\LICENSE" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
