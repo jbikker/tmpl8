@@ -129,6 +129,10 @@ void main()
 	freopen_s( &file, "CON", "w", stderr );
 	SetWindowPos( GetConsoleWindow(), HWND_TOP, 0, 0, 1280, 800, 0 );
 	glfwShowWindow( window );
+	// use the new console window to print some important things
+	printf( "Running Tmpl8-2024, updated on July 21\n" );
+	char dir[2048];
+	printf( "Working directory: %s\n", getcwd( dir, 2048 ) );
 #endif
 	// initialize application
 	InitRenderTarget( SCRWIDTH, SCRHEIGHT );

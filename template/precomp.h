@@ -383,13 +383,13 @@ __inline uint64_t calccrc64( unsigned char* pbData, int len ) // crc64, from htt
 		crc = crc64_table[t] ^ (crc << 8);
 	return crc ^ CLEARCRC64;
 }
-#define TRACKCHANGES public: bool Changed() { uint64_t currentcrc = crc64; \
-crc64 = CLEARCRC64; uint64_t newcrc = calccrc64( (uchar*)this, sizeof( *this ) ); \
-bool changed = newcrc != currentcrc; crc64 = newcrc; return changed; } \
-bool IsDirty() { uint64_t t = crc64; bool c = Changed(); crc64 = t; return c; } \
-void MarkAsDirty() { dirty++; } \
+#define TRACKCHANGES public: bool Changed() { uint64_t currentcrc = __crc64; \
+__crc64 = CLEARCRC64; uint64_t newcrc = calccrc64( (uchar*)this, (int)(__int64( &__dirty ) + 4 - __int64( this )) ); \
+bool changed = newcrc != currentcrc; __crc64 = newcrc; return changed; } \
+bool IsDirty() { uint64_t t = __crc64; bool c = Changed(); __crc64 = t; return c; } \
+void MarkAsDirty() { __dirty++; } \
 void MarkAsNotDirty() { Changed(); } \
-private: uint64_t crc64 = CLEARCRC64; uint dirty = 0;
+private: uint64_t __crc64 = CLEARCRC64; uint __dirty = 0; public:
 
 // scene graph management
 #include "scene.h"

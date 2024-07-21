@@ -61,7 +61,7 @@ void SkyDome::Load( const char* filename, const float3 scale )
 	if (scale.x != 1.f || scale.y != 1.f || scale.z != 1.f)
 		for (int p = 0; p < width * height; ++p) pixels[p] *= scale;
 	// done
-	dirty = true;
+	MarkAsDirty();
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -126,19 +126,19 @@ Mesh::Mesh( const tinygltf::Mesh& gltfMesh, const tinygltf::Model& gltfModel, co
 void Mesh::LoadGeometry( const char* file, const char* dir, const float scale, const bool flatShaded )
 {
 	// process supplied file name
-	mat4 transform = mat4::Scale( scale ); // may include scale, translation, axis exchange
+	mat4 T = mat4::Scale( scale ); // may include scale, translation, axis exchange
 	string combined = string( dir ) + (dir[strlen( dir ) - 1] == '/' ? "" : "/") + string( file );
 	for (int l = (int)combined.size(), i = 0; i < l; i++) if (combined[i] >= 'A' && combined[i] <= 'Z') combined[i] -= 'Z' - 'z';
 	string extension = (combined.find_last_of( "." ) != string::npos) ? combined.substr( combined.find_last_of( "." ) + 1 ) : "";
 	if (extension.compare( "obj" ) != 0) FATALERROR( "unsupported extension in file %s", combined.c_str() );
-	LoadGeometryFromOBJ( combined.c_str(), dir, transform, flatShaded );
+	LoadGeometryFromOBJ( combined.c_str(), dir, T, flatShaded );
 }
 
 //  +-----------------------------------------------------------------------------+
 //  |  Mesh::LoadGeometryFromObj                                                  |
 //  |  Load an obj file using tinyobj.                                      LH2'24|
 //  +-----------------------------------------------------------------------------+
-void Mesh::LoadGeometryFromOBJ( const string& fileName, const char* directory, const mat4& transform, const bool flatShaded )
+void Mesh::LoadGeometryFromOBJ( const string& fileName, const char* directory, const mat4& T, const bool flatShaded )
 {
 	// load obj file
 	tinyobj::attrib_t attrib;
@@ -222,9 +222,9 @@ void Mesh::LoadGeometryFromOBJ( const string& fileName, const char* directory, c
 		const float3 v0 = make_float3( attrib.vertices[idx0 * 3 + 0], attrib.vertices[idx0 * 3 + 1], attrib.vertices[idx0 * 3 + 2] );
 		const float3 v1 = make_float3( attrib.vertices[idx1 * 3 + 0], attrib.vertices[idx1 * 3 + 1], attrib.vertices[idx1 * 3 + 2] );
 		const float3 v2 = make_float3( attrib.vertices[idx2 * 3 + 0], attrib.vertices[idx2 * 3 + 1], attrib.vertices[idx2 * 3 + 2] );
-		const float4 tv0 = make_float4( v0, 1 ) * transform;
-		const float4 tv1 = make_float4( v1, 1 ) * transform;
-		const float4 tv2 = make_float4( v2, 1 ) * transform;
+		const float4 tv0 = make_float4( v0, 1 ) * T;
+		const float4 tv1 = make_float4( v1, 1 ) * T;
+		const float4 tv2 = make_float4( v2, 1 ) * T;
 		vertices.push_back( tv0 );
 		vertices.push_back( tv1 );
 		vertices.push_back( tv2 );
@@ -768,6 +768,54 @@ static FatTri TransformedFatTri( FatTri* tri, mat4 T )
 }
 
 //  +-----------------------------------------------------------------------------+
+//  |  Mesh::UpdateBVH()                                                          |
+//  |  Create or update the mesh BVH.                                       LH2'24|
+//  +-----------------------------------------------------------------------------+
+void Mesh::UpdateBVH()
+{
+	if (!bvh)
+	{
+		bvh = new BVH();
+		bvh->Build( this );
+	}
+	else
+	{
+		// bvh->Refit(); // that will have to do for now.
+	}
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Mesh::Intersect()                                                          |
+//  |  Intersect the (transformed) mesh BVH with a ray.                     LH2'24|
+//  +-----------------------------------------------------------------------------+
+void Mesh::Intersect( Ray& ray )
+{
+	// backup ray and transform original
+	Ray backupRay = ray;
+	ray.O = TransformPosition( ray.O, invTransform );
+	ray.D = TransformVector( ray.D, invTransform );
+	ray.rD = float3( safercp( ray.D.x ), safercp( ray.D.y ), safercp( ray.D.z ) );
+	// trace ray through BVH
+	bvh->Intersect( ray );
+	// restore ray origin and direction
+	backupRay.hit = ray.hit;
+	ray = backupRay;
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Mesh::UpdateWorldBounds()                                                  |
+//  |  Update world-space bounds over the transformed AABB.                 LH2'24|
+//  +-----------------------------------------------------------------------------+
+void Mesh::UpdateWorldBounds()
+{
+	worldBounds.Reset();
+	float3 bmin = bvh->bvhNode[0].aabbMin, bmax = bvh->bvhNode[0].aabbMax;
+	for (int i = 0; i < 8; i++)
+		worldBounds.Grow( TransformPosition( float3( i & 1 ? bmax.x : bmin.x,
+			i & 2 ? bmax.y : bmin.y, i & 4 ? bmax.z : bmin.z ), transform ) );
+}
+
+//  +-----------------------------------------------------------------------------+
 //  |  Node::Node                                                                 |
 //  |  Constructors.                                                        LH2'24|
 //  +-----------------------------------------------------------------------------+
@@ -879,13 +927,9 @@ void Node::UpdateTransformFromTRS()
 //  |  child nodes. If a change is detected, the light triangles are updated      |
 //  |  as well.                                                             LH2'24|
 //  +-----------------------------------------------------------------------------+
-bool Node::Update( mat4& T, vector<int>& instances, int& posInInstanceArray )
+void Node::Update( const mat4& T )
 {
-	// update the combined transform for this node
-	bool thisWasModified = Changed();
-	bool instancesChanged = thisWasModified;
-	treeChanged = thisWasModified;
-	if (transformed)
+	if (transformed /* true if node was affected by animation channel */)
 	{
 		UpdateTransformFromTRS();
 		transformed = false;
@@ -895,43 +939,36 @@ bool Node::Update( mat4& T, vector<int>& instances, int& posInInstanceArray )
 	for (int s = (int)childIdx.size(), i = 0; i < s; i++)
 	{
 		Node* child = Scene::nodePool[childIdx[i]];
-		bool childChanged = child->Update( combinedTransform, instances, posInInstanceArray );
-		instancesChanged |= childChanged;
-		treeChanged |= childChanged;
+		child->Update( combinedTransform );
 	}
 	// update animations
 	if (meshID > -1)
 	{
-		if (morphed)
+		Mesh* mesh = Scene::meshPool[meshID];
+		mesh->transform = combinedTransform;
+		mesh->invTransform = combinedTransform.Inverted();
+		if (morphed /* true if bone weights were affected by animation channel */)
 		{
-			Scene::meshPool[meshID]->SetPose( weights );
+			mesh->SetPose( weights );
 			morphed = false;
-		}
-		if (thisWasModified && hasLights) UpdateLights();
-		if (instanceID != posInInstanceArray)
-		{
-			instancesChanged = true;
-			if (posInInstanceArray < instances.size())
-				instances[posInInstanceArray] = ID;
-			else
-				instances.push_back( ID );
 		}
 		if (skinID > -1)
 		{
 			Skin* skin = Scene::skins[skinID];
-			mat4 meshTransform = combinedTransform;
-			mat4 meshTransformInverted = meshTransform.Inverted();
 			for (int s = (int)skin->joints.size(), j = 0; j < s; j++)
 			{
 				Node* jointNode = Scene::nodePool[skin->joints[j]];
-				skin->jointMat[j] = meshTransformInverted * jointNode->combinedTransform * skin->inverseBindMatrices[j];
+				skin->jointMat[j] = mesh->invTransform * jointNode->combinedTransform * skin->inverseBindMatrices[j];
 			}
-			Scene::meshPool[meshID]->SetPose( skin );
+			mesh->SetPose( skin ); // TODO: I hope this doesn't overwrite SetPose(weights) ?
 		}
-		posInInstanceArray++;
+		if (mesh->Changed())
+		{
+			// build or refit BVH
+			mesh->UpdateBVH();
+			mesh->UpdateWorldBounds();
+		}
 	}
-	// all done.
-	return instancesChanged;
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -1242,16 +1279,16 @@ float Animation::Sampler::SampleFloat( float currentTime, int k, int i, int coun
 	const float t0 = t[k], t1 = t[k + 1];
 	const float f = (currentTime - t0) / (t1 - t0);
 	// sample
-	if (f <= 0) return floatKey[0]; switch (interpolation)
+	if (f <= 0) return floatKey[0]; else switch (interpolation)
 	{
 	case SPLINE:
 	{
-		const float t_ = f, t2 = t_ * t_, t3 = t2 * t_;
+		const float tt = f, t2 = tt * tt, t3 = t2 * tt;
 		const float p0 = floatKey[(k * count + i) * 3 + 1];
-		const float m0 = (t_ - t0) * floatKey[(k * count + i) * 3 + 2];
+		const float m0 = (t1 - t0) * floatKey[(k * count + i) * 3 + 2];
 		const float p1 = floatKey[((k + 1) * count + i) * 3 + 1];
-		const float m1 = (t_ - t0) * floatKey[((k + 1) * count + i) * 3];
-		return m0 * (t3 - 2 * t2 + t_) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
+		const float m1 = (t1 - t0) * floatKey[((k + 1) * count + i) * 3];
+		return m0 * (t3 - 2 * t2 + tt) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
 	}
 	case Sampler::STEP:
 		return floatKey[k];
@@ -1267,16 +1304,16 @@ float3 Animation::Sampler::SampleVec3( float currentTime, int k ) const
 	const float t0 = t[k], t1 = t[k + 1];
 	const float f = (currentTime - t0) / (t1 - t0);
 	// sample
-	if (f <= 0) return vec3Key[0]; switch (interpolation)
+	if (f <= 0) return vec3Key[0]; else switch (interpolation)
 	{
 	case SPLINE:
 	{
-		const float t_ = f, t2 = t_ * t_, t3 = t2 * t_;
+		const float tt = f, t2 = tt * tt, t3 = t2 * tt;
 		const float3 p0 = vec3Key[k * 3 + 1];
 		const float3 m0 = (t1 - t0) * vec3Key[k * 3 + 2];
 		const float3 p1 = vec3Key[(k + 1) * 3 + 1];
 		const float3 m1 = (t1 - t0) * vec3Key[(k + 1) * 3];
-		return m0 * (t3 - 2 * t2 + t_) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
+		return m0 * (t3 - 2 * t2 + tt) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
 	}
 	case Sampler::STEP: return vec3Key[k];
 	default: return (1 - f) * vec3Key[k] + f * vec3Key[k + 1];
@@ -1296,12 +1333,12 @@ quat Animation::Sampler::SampleQuat( float currentTime, int k ) const
 	#if 1
 	case SPLINE:
 	{
-		const float t_ = f, t2 = t_ * t_, t3 = t2 * t_;
+		const float tt = f, t2 = tt * tt, t3 = t2 * tt;
 		const quat p0 = vec4Key[k * 3 + 1];
 		const quat m0 = vec4Key[k * 3 + 2] * (t1 - t0);
 		const quat p1 = vec4Key[(k + 1) * 3 + 1];
 		const quat m1 = vec4Key[(k + 1) * 3] * (t1 - t0);
-		key = m0 * (t3 - 2 * t2 + t_) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
+		key = m0 * (t3 - 2 * t2 + tt) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
 		key.normalize();
 		break;
 	}
@@ -1387,19 +1424,16 @@ void Animation::Channel::Update( const float dt, const Sampler* sampler )
 		// apply anination key
 		if (target == 0) // translation
 		{
-			assert( sampler->t.size() == sampler->vec3Key.size() );
 			Scene::nodePool[nodeIdx]->translation = sampler->SampleVec3( t, k );
 			Scene::nodePool[nodeIdx]->transformed = true;
 		}
 		else if (target == 1) // rotation
 		{
-			assert( sampler->t.size() == sampler->vec4Key.size() );
 			Scene::nodePool[nodeIdx]->rotation = sampler->SampleQuat( t, k );
 			Scene::nodePool[nodeIdx]->transformed = true;
 		}
 		else if (target == 2) // scale
 		{
-			assert( sampler->t.size() == sampler->vec3Key.size() );
 			Scene::nodePool[nodeIdx]->scale = sampler->SampleVec3( t, k );
 			Scene::nodePool[nodeIdx]->transformed = true;
 		}
@@ -1430,6 +1464,15 @@ void Animation::ConvertFromGLTFAnim( tinygltf::Animation& gltfAnim, tinygltf::Mo
 {
 	for (int i = 0; i < gltfAnim.samplers.size(); i++) sampler.push_back( new Sampler( gltfAnim.samplers[i], gltfModel ) );
 	for (int i = 0; i < gltfAnim.channels.size(); i++) channel.push_back( new Channel( gltfAnim.channels[i], nodeBase ) );
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Animation::SetTime                                                         |
+//  |  Set the animation timers of all channels to a specific value.        LH2'24|
+//  +-----------------------------------------------------------------------------+
+void Animation::SetTime( const float t )
+{
+	for (int i = 0; i < channel.size(); i++) channel[i]->SetTime( t );
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -1658,6 +1701,256 @@ void Texture::BumpToNormalMap( float heightScale )
 	}
 	if (width * height > 0) memcpy( idata, normalMap, width * height * 4 );
 	delete normalMap;
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  BVH::Build                                                                 |
+//  |  Construct the Bounding Volume Hierarchy.                             LH2'24|
+//  +-----------------------------------------------------------------------------+
+void BVH::Build( Mesh* mesh, uint cap )
+{
+	// reset node pool
+	nodesUsed = 2;
+	triCount = min( cap, (uint)mesh->vertices.size() / 3 );
+	if (!bvhNode)
+	{
+		bvhNode = (BVHNode*)MALLOC64( triCount * 2 * sizeof( BVHNode ) );
+		memset( &bvhNode[1], 0, 32 ); // avoid crash in refit.
+		triIdx = new uint[triCount];
+		centroid = new float4[triCount];
+		tris = mesh->vertices.data();
+	}
+	else assert( tris == mesh->vertices.data() ); // don't change polygon count between builds
+	// populate triangle index array
+	for (uint i = 0; i < triCount; i++) triIdx[i] = i;
+	// calculate triangle centroids for partitioning
+	for (uint i = 0; i < triCount; i++)
+		centroid[i] = (tris[i * 3] + tris[i * 3 + 1] + tris[i * 3 + 2]) * 0.333333f;
+	// assign all triangles to root node
+	BVHNode& root = bvhNode[0];
+	root.leftFirst = 0, root.triCount = triCount;
+	float3 centroidMin, centroidMax;
+	UpdateNodeBounds( 0, centroidMin, centroidMax );
+	// subdivide recursively
+	Subdivide( 0, 0, nodesUsed, centroidMin, centroidMax );
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  BVH::Refit                                                                 |
+//  |  Refit the BVH to fit changed geometry.                               LH2'24|
+//  +-----------------------------------------------------------------------------+
+void BVH::Refit()
+{
+	for (int i = nodesUsed - 1; i >= 0; i--)
+	{
+		BVHNode& node = bvhNode[i];
+		if (node.isLeaf()) // leaf: adjust to current triangle vertex positions
+		{
+			float4 aabbMin( 1e30f ), aabbMax( -1e30f );
+			for (uint first = node.leftFirst, j = 0; j < node.triCount; j++)
+			{
+				const uint vertIdx = triIdx[first + j] * 3;
+				aabbMin = fminf( aabbMin, tris[vertIdx] ), aabbMax = fmaxf( aabbMax, tris[vertIdx] );
+				aabbMin = fminf( aabbMin, tris[vertIdx + 1] ), aabbMax = fmaxf( aabbMax, tris[vertIdx + 1] );
+				aabbMin = fminf( aabbMin, tris[vertIdx + 2] ), aabbMax = fmaxf( aabbMax, tris[vertIdx + 2] );
+			}
+			node.aabbMin = aabbMin, node.aabbMax = aabbMax;
+		}
+		else // interior node: adjust to child bounds
+		{
+			BVHNode& left = bvhNode[node.leftFirst], & right = bvhNode[node.leftFirst + 1];
+			node.aabbMin = fminf( left.aabbMin, right.aabbMin );
+			node.aabbMax = fmaxf( left.aabbMax, right.aabbMax );
+		}
+	}
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  BVH::Intersect                                                             |
+//  |  Intersect a BVH with a ray.                                          LH2'24|
+//  +-----------------------------------------------------------------------------+
+void BVH::Intersect( Ray& ray )
+{
+	// traverse bvh
+	BVHNode* node = &bvhNode[0], * stack[64];
+	uint stackPtr = 0;
+	while (1)
+	{
+		if (node->isLeaf())
+		{
+			for (uint i = 0; i < node->triCount; i++) IntersectTri( ray, triIdx[node->leftFirst + i] );
+			if (stackPtr == 0) break; else node = stack[--stackPtr];
+			continue;
+		}
+		BVHNode* child1 = &bvhNode[node->leftFirst], * child2 = &bvhNode[node->leftFirst + 1];
+		float dist1 = child1->Intersect( ray ), dist2 = child2->Intersect( ray );
+		if (dist1 > dist2) { swap( dist1, dist2 ); swap( child1, child2 ); }
+		if (dist1 == 1e30f)
+		{
+			if (stackPtr == 0) break; else node = stack[--stackPtr];
+		}
+		else
+		{
+			node = child1;
+			if (dist2 != 1e30f) stack[stackPtr++] = child2;
+		}
+	}
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  BVH::BVHNode::Intersect                                                    |
+//  |  Calculate intersection between a ray and the node bounds.            LH2'24|
+//  +-----------------------------------------------------------------------------+
+void BVH::IntersectTri( Ray& ray, const uint idx )
+{
+	// Moeller-Trumbore ray/triangle intersection algorithm
+	const uint vertIdx = idx * 3;
+	const float3 edge1 = tris[vertIdx + 1] - tris[vertIdx];
+	const float3 edge2 = tris[vertIdx + 2] - tris[vertIdx];
+	const float3 h = cross( ray.D, edge2 );
+	const float a = dot( edge1, h );
+	if (fabs( a ) < 0.00001f) return; // ray parallel to triangle
+	const float f = 1 / a;
+	const float3 s = ray.O - float3( tris[vertIdx] );
+	const float u = f * dot( s, h );
+	if (u < 0 || u > 1) return;
+	const float3 q = cross( s, edge1 );
+	const float v = f * dot( ray.D, q );
+	if (v < 0 || u + v > 1) return;
+	const float t = f * dot( edge2, q );
+	if (t > 0.0001f && t < ray.hit.t) ray.hit.t = t, ray.hit.u = u, ray.hit.v = v, ray.hit.prim = idx;
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  BVH::BVHNode::Intersect                                                    |
+//  |  Calculate intersection between a ray and the node bounds.            LH2'24|
+//  +-----------------------------------------------------------------------------+
+float BVH::BVHNode::Intersect( const Ray& ray )
+{
+	// "slab test" ray/AABB intersection
+	float tx1 = (aabbMin.x - ray.O.x) * ray.rD.x, tx2 = (aabbMax.x - ray.O.x) * ray.rD.x;
+	float tmin = min( tx1, tx2 ), tmax = max( tx1, tx2 );
+	float ty1 = (aabbMin.y - ray.O.y) * ray.rD.y, ty2 = (aabbMax.y - ray.O.y) * ray.rD.y;
+	tmin = max( tmin, min( ty1, ty2 ) ), tmax = min( tmax, max( ty1, ty2 ) );
+	float tz1 = (aabbMin.z - ray.O.z) * ray.rD.z, tz2 = (aabbMax.z - ray.O.z) * ray.rD.z;
+	tmin = max( tmin, min( tz1, tz2 ) ), tmax = min( tmax, max( tz1, tz2 ) );
+	if (tmax >= tmin && tmin < ray.hit.t && tmax >= 0) return tmin; else return 1e30f;
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  BVH::Subdivide                                                             |
+//  |  Recursively subdivide a BVH node.                                    LH2'24|
+//  +-----------------------------------------------------------------------------+
+void BVH::Subdivide( uint nodeIdx, uint depth, uint& nodePtr, float3& centroidMin, float3& centroidMax )
+{
+	BVHNode& node = bvhNode[nodeIdx];
+	// determine split axis using SAH
+	int axis, splitPos;
+	float splitCost = FindBestSplitPlane( node, axis, splitPos, centroidMin, centroidMax );
+	// terminate recursion
+	float nosplitCost = node.CalculateNodeCost();
+	if (splitCost >= nosplitCost) return;
+	// in-place partition
+	int i = node.leftFirst;
+	int j = i + node.triCount - 1;
+	float scale = BVHBINS / (centroidMax[axis] - centroidMin[axis]);
+	while (i <= j)
+	{
+		// use the exact calculation we used for binning to prevent rare inaccuracies
+		int binIdx = min( BVHBINS - 1, (int)((centroid[triIdx[i]][axis] - centroidMin[axis]) * scale) );
+		if (binIdx < splitPos) i++; else swap( triIdx[i], triIdx[j--] );
+	}
+	// abort split if one of the sides is empty
+	uint leftCount = i - node.leftFirst;
+	if (leftCount == 0 || leftCount == node.triCount) return; // never happens for dragon mesh, nice
+	// create child nodes
+	int leftChildIdx = nodePtr++;
+	int rightChildIdx = nodePtr++;
+	bvhNode[leftChildIdx].leftFirst = node.leftFirst;
+	bvhNode[leftChildIdx].triCount = leftCount;
+	bvhNode[rightChildIdx].leftFirst = i;
+	bvhNode[rightChildIdx].triCount = node.triCount - leftCount;
+	node.leftFirst = leftChildIdx;
+	node.triCount = 0;
+	// recurse
+	UpdateNodeBounds( leftChildIdx, centroidMin, centroidMax );
+	Subdivide( leftChildIdx, depth + 1, nodePtr, centroidMin, centroidMax );
+	UpdateNodeBounds( rightChildIdx, centroidMin, centroidMax );
+	Subdivide( rightChildIdx, depth + 1, nodePtr, centroidMin, centroidMax );
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  BVH::FindBestSplitPlane                                                    |
+//  |  Use the Surface Area Heuristic to place a split plane.               LH2'24|
+//  +-----------------------------------------------------------------------------+
+float BVH::FindBestSplitPlane( BVHNode& node, int& axis, int& splitPos, float3& centroidMin, float3& centroidMax )
+{
+	float bestCost = 1e30f;
+	for (int a = 0; a < 3; a++)
+	{
+		float boundsMin = centroidMin[a], boundsMax = centroidMax[a];
+		if (boundsMin == boundsMax) continue;
+		// populate the bins
+		float scale = BVHBINS / (boundsMax - boundsMin);
+		float leftCountArea[BVHBINS - 1], rightCountArea[BVHBINS - 1];
+		int leftSum = 0, rightSum = 0;
+		struct Bin { aabb bounds; int triCount = 0; } bin[BVHBINS];
+		for (uint i = 0; i < node.triCount; i++)
+		{
+			uint idx = triIdx[node.leftFirst + i], vertIdx = idx * 3;
+			int binIdx = min( BVHBINS - 1, (int)((centroid[idx][a] - boundsMin) * scale) );
+			bin[binIdx].triCount++;
+			bin[binIdx].bounds.Grow( tris[vertIdx] );
+			bin[binIdx].bounds.Grow( tris[vertIdx + 1] );
+			bin[binIdx].bounds.Grow( tris[vertIdx + 2] );
+		}
+		// gather data for the 7 planes between the 8 bins
+		aabb leftBox, rightBox;
+		for (int i = 0; i < BVHBINS - 1; i++)
+		{
+			leftSum += bin[i].triCount;
+			leftBox.Grow( bin[i].bounds );
+			leftCountArea[i] = leftSum * leftBox.Area();
+			rightSum += bin[BVHBINS - 1 - i].triCount;
+			rightBox.Grow( bin[BVHBINS - 1 - i].bounds );
+			rightCountArea[BVHBINS - 2 - i] = rightSum * rightBox.Area();
+		}
+		// calculate SAH cost for the 7 planes
+		scale = (boundsMax - boundsMin) / BVHBINS;
+		for (int i = 0; i < BVHBINS - 1; i++)
+		{
+			const float planeCost = leftCountArea[i] + rightCountArea[i];
+			if (planeCost < bestCost)
+				axis = a, splitPos = i + 1, bestCost = planeCost;
+		}
+	}
+	return bestCost;
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  BVH::UpdateNodeBounds                                                      |
+//  |  Update node AABB so all triangles fit in it.                         LH2'24|
+//  +-----------------------------------------------------------------------------+
+void BVH::UpdateNodeBounds( const uint nodeIdx, float3& centroidMin, float3& centroidMax )
+{
+	BVHNode& node = bvhNode[nodeIdx];
+	float4 aabbMin( 1e30f ), aabbMax( -1e30f );
+	float4 midMin( 1e30f ), midMax( -1e30f );
+	for (uint first = node.leftFirst, i = 0; i < node.triCount; i++)
+	{
+		uint leafTriIdx = triIdx[first + i];
+		uint vertIdx = leafTriIdx * 3;
+		aabbMin = fminf( aabbMin, tris[vertIdx] );
+		aabbMin = fminf( aabbMin, tris[vertIdx + 1] );
+		aabbMin = fminf( aabbMin, tris[vertIdx + 2] );
+		aabbMax = fmaxf( aabbMax, tris[vertIdx] );
+		aabbMax = fmaxf( aabbMax, tris[vertIdx + 1] );
+		aabbMax = fmaxf( aabbMax, tris[vertIdx + 2] );
+		midMin = fminf( midMin, centroid[leafTriIdx] );
+		midMax = fmaxf( midMax, centroid[leafTriIdx] );
+	}
+	node.aabbMin = aabbMin, centroidMin = midMin;
+	node.aabbMax = aabbMax, centroidMax = midMax;
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -1970,22 +2263,6 @@ int Scene::AddQuad( float3 N, const float3 pos, const float width, const float h
 //  +-----------------------------------------------------------------------------+
 int Scene::AddInstance( Node* newNode )
 {
-	if (nodeListHoles > 0)
-	{
-		// we have holes in the nodes vector due to instance deletions; search from the
-		// end of the list to speed up frequent additions / deletions in complex scenes.
-		for (int i = (int)nodePool.size() - 1; i >= 0; i--) if (nodePool[i] == 0)
-		{
-			// overwrite an empty slot, created by deleting an instance
-			nodePool[i] = newNode;
-			newNode->ID = i;
-			rootNodes.push_back( i );
-			nodeListHoles--; // plugged one hole.
-			return i;
-		}
-	}
-	// no empty slots available or found; make sure we don't look for them again.
-	nodeListHoles = 0;
 	// insert the new node at the end of the list
 	newNode->ID = (int)nodePool.size();
 	nodePool.push_back( newNode );
@@ -2024,7 +2301,6 @@ void Scene::RemoveNode( const int nodeId )
 	Node* node = nodePool[nodeId];
 	nodePool[nodeId] = 0; // safe; we only access the nodes vector indirectly.
 	delete node;
-	nodeListHoles++; // Scene::AddInstance will fill up holes first.
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -2190,16 +2466,6 @@ void Scene::UpdateAnimation( const int animId, const float dt )
 }
 
 //  +-----------------------------------------------------------------------------+
-//  |  Scene::UpdateBVH                                                           |
-//  |  Update the BVH for each mesh in the scnene.                                |
-//  |  TODO: Update TLAS for the scene.                                     LH2'24|
-//  +-----------------------------------------------------------------------------+
-void Scene::UpdateBVH()
-{
-	for (auto mesh : meshPool) mesh->UpdateBVH();
-}
-
-//  +-----------------------------------------------------------------------------+
 //  |  Scene::CreateTexture                                                       |
 //  |  Return a texture. Create it anew, even if a texture with the same origin   |
 //  |  already exists.                                                      LH2'24|
@@ -2284,53 +2550,63 @@ int Scene::AddDirectionalLight( const float3 direction, const float3 radiance )
 }
 
 //  +-----------------------------------------------------------------------------+
-//  |  BVH::Build                                                                 |
-//  |  Construct the Bounding Volume Hierarchy.                             LH2'24|
+//  |  Scene::UpdateSceneGraph (formerly in RenderSystem)                         |
+//  |  Walk the scene graph, updating all node matrices.                    LH2'24|
 //  +-----------------------------------------------------------------------------+
-void BVH::Build( Mesh* mesh )
+void Scene::UpdateSceneGraph( const float deltaTime )
 {
-	// reset node pool
-	nodesUsed = 2;
-	triCount = (uint)mesh->vertices.size() / 3;
-	if (!bvhNode)
+	// play animations
+	for (int s = AnimationCount(), i = 0; i < s; i++)
+		UpdateAnimation( i, deltaTime );
+	// update poses, concatenate matrices, rebuild BVHs
+	for (int nodeIdx : rootNodes)
 	{
-		bvhNode = (BVHNode*)MALLOC64( triCount * 2 * sizeof( BVHNode ) );
-		triIdx = new uint[triCount];
-		centroid = new float4[triCount];
-		tris = mesh->vertices.data();
+		Node* node = nodePool[nodeIdx];
+		mat4 T;
+		node->Update( T /* start with an identity matrix */ );
 	}
-	else assert( tris == mesh->vertices.data() ); // don't change polygon count between builds
-	// populate triangle index array
-	for (uint i = 0; i < triCount; i++) triIdx[i] = i;
-	// calculate triangle centroids for partitioning
-	for (uint i = 0; i < triCount; i++)
-		centroid[i] = (tris[i * 3] + tris[i * 3 + 1] + tris[i * 3 + 2]) * 0.333333f;
-	// assign all triangles to root node
-	BVHNode& root = bvhNode[0];
-	root.leftFirst = 0, root.triCount = triCount;
-	float3 centroidMin, centroidMax;
-	UpdateNodeBounds( 0, centroidMin, centroidMax );
-	// subdivide recursively
-	Subdivide( 0, 0, nodesUsed, centroidMin, centroidMax );
+	// construct TLAS
+	static Mesh m( 512 /* this will be our max BLAS count for now */ );
+	const uint blasCount = (uint)meshPool.size();
+	for (uint i = 0; i < blasCount; i++)
+	{
+		m.vertices[i * 3 + 0] = meshPool[i]->worldBounds.bmin3;
+		m.vertices[i * 3 + 1] = meshPool[i]->worldBounds.bmax3;
+		m.vertices[i * 3 + 2] = (meshPool[i]->worldBounds.bmin3 + meshPool[i]->worldBounds.bmax3) * 0.5f;
+	}
+	tlas.Build( &m, blasCount );
 }
 
 //  +-----------------------------------------------------------------------------+
-//  |  BVH::Intersect                                                             |
-//  |  Intersect a BVH with a ray.                                          LH2'24|
+//  |  Scene::Intersect                                                           |
+//  |  Intersect a TLAS with a ray.                                         LH2'24|
 //  +-----------------------------------------------------------------------------+
-void BVH::Intersect( Ray& ray )
+void Scene::Intersect( Ray& ray )
 {
-	BVHNode* node = &bvhNode[0], * stack[64];
+#if 1
+	// brute force
+	for (int s = (int)meshPool.size(), i = 0; i < s; i++)
+		meshPool[i]->Intersect( ray );
+#else
+	// use a local stack instead of a recursive function
+	BVH::BVHNode* node = &tlas.bvhNode[0], * stack[128];
 	uint stackPtr = 0;
+	// traversl loop; terminates when the stack is empty
 	while (1)
 	{
 		if (node->isLeaf())
 		{
-			for (uint i = 0; i < node->triCount; i++) IntersectTri( ray, triIdx[node->leftFirst + i] );
+			// current node is a leaf: intersect BLAS
+			int blasCount = node->triCount;
+			for (int i = 0; i < blasCount; i++)
+				meshPool[node->leftFirst + i]->Intersect( ray );
+			// pop a node from the stack; terminate if none left
 			if (stackPtr == 0) break; else node = stack[--stackPtr];
 			continue;
 		}
-		BVHNode* child1 = &bvhNode[node->leftFirst], * child2 = &bvhNode[node->leftFirst + 1];
+		// current node is an interior node: visit child nodes, ordered
+		BVH::BVHNode* child1 = &tlas.bvhNode[node->leftFirst];
+		BVH::BVHNode* child2 = &tlas.bvhNode[node->leftFirst + 1];
 		float dist1 = child1->Intersect( ray ), dist2 = child2->Intersect( ray );
 		if (dist1 > dist2) { swap( dist1, dist2 ); swap( child1, child2 ); }
 		if (dist1 == 1e30f)
@@ -2343,160 +2619,5 @@ void BVH::Intersect( Ray& ray )
 			if (dist2 != 1e30f) stack[stackPtr++] = child2;
 		}
 	}
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::BVHNode::Intersect                                                    |
-//  |  Calculate intersection between a ray and the node bounds.            LH2'24|
-//  +-----------------------------------------------------------------------------+
-void BVH::IntersectTri( Ray& ray, const uint idx )
-{
-	// Moeller-Trumbore ray/triangle intersection algorithm
-	const uint vertIdx = idx * 3;
-	const float3 edge1 = tris[vertIdx + 1] - tris[vertIdx];
-	const float3 edge2 = tris[vertIdx + 2] - tris[vertIdx];
-	const float3 h = cross( ray.D, edge2 );
-	const float a = dot( edge1, h );
-	if (fabs( a ) < 0.00001f) return; // ray parallel to triangle
-	const float f = 1 / a;
-	const float3 s = ray.O - float3( tris[vertIdx] );
-	const float u = f * dot( s, h );
-	if (u < 0 || u > 1) return;
-	const float3 q = cross( s, edge1 );
-	const float v = f * dot( ray.D, q );
-	if (v < 0 || u + v > 1) return;
-	const float t = f * dot( edge2, q );
-	if (t > 0.0001f && t < ray.hit.t) ray.hit.t = t, ray.hit.u = u, ray.hit.v = v, ray.hit.prim = idx;
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::BVHNode::Intersect                                                    |
-//  |  Calculate intersection between a ray and the node bounds.            LH2'24|
-//  +-----------------------------------------------------------------------------+
-float BVH::BVHNode::Intersect( const Ray& ray )
-{
-	// "slab test" ray/AABB intersection
-	float tx1 = (aabbMin.x - ray.O.x) * ray.rD.x, tx2 = (aabbMax.x - ray.O.x) * ray.rD.x;
-	float tmin = min( tx1, tx2 ), tmax = max( tx1, tx2 );
-	float ty1 = (aabbMin.y - ray.O.y) * ray.rD.y, ty2 = (aabbMax.y - ray.O.y) * ray.rD.y;
-	tmin = max( tmin, min( ty1, ty2 ) ), tmax = min( tmax, max( ty1, ty2 ) );
-	float tz1 = (aabbMin.z - ray.O.z) * ray.rD.z, tz2 = (aabbMax.z - ray.O.z) * ray.rD.z;
-	tmin = max( tmin, min( tz1, tz2 ) ), tmax = min( tmax, max( tz1, tz2 ) );
-	if (tmax >= tmin && tmin < ray.hit.t && tmax >= 0) return tmin; else return 1e30f;
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::Subdivide                                                             |
-//  |  Recursively subdivide a BVH node.                                    LH2'24|
-//  +-----------------------------------------------------------------------------+
-void BVH::Subdivide( uint nodeIdx, uint depth, uint& nodePtr, float3& centroidMin, float3& centroidMax )
-{
-	BVHNode& node = bvhNode[nodeIdx];
-	// determine split axis using SAH
-	int axis, splitPos;
-	float splitCost = FindBestSplitPlane( node, axis, splitPos, centroidMin, centroidMax );
-	// terminate recursion
-	float nosplitCost = node.CalculateNodeCost();
-	if (splitCost >= nosplitCost) return;
-	// in-place partition
-	int i = node.leftFirst;
-	int j = i + node.triCount - 1;
-	float scale = BVHBINS / (centroidMax[axis] - centroidMin[axis]);
-	while (i <= j)
-	{
-		// use the exact calculation we used for binning to prevent rare inaccuracies
-		int binIdx = min( BVHBINS - 1, (int)((centroid[triIdx[i]][axis] - centroidMin[axis]) * scale) );
-		if (binIdx < splitPos) i++; else swap( triIdx[i], triIdx[j--] );
-	}
-	// abort split if one of the sides is empty
-	uint leftCount = i - node.leftFirst;
-	if (leftCount == 0 || leftCount == node.triCount) return; // never happens for dragon mesh, nice
-	// create child nodes
-	int leftChildIdx = nodePtr++;
-	int rightChildIdx = nodePtr++;
-	bvhNode[leftChildIdx].leftFirst = node.leftFirst;
-	bvhNode[leftChildIdx].triCount = leftCount;
-	bvhNode[rightChildIdx].leftFirst = i;
-	bvhNode[rightChildIdx].triCount = node.triCount - leftCount;
-	node.leftFirst = leftChildIdx;
-	node.triCount = 0;
-	// recurse
-	UpdateNodeBounds( leftChildIdx, centroidMin, centroidMax );
-	Subdivide( leftChildIdx, depth + 1, nodePtr, centroidMin, centroidMax );
-	UpdateNodeBounds( rightChildIdx, centroidMin, centroidMax );
-	Subdivide( rightChildIdx, depth + 1, nodePtr, centroidMin, centroidMax );
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::FindBestSplitPlane                                                    |
-//  |  Use the Surface Area Heuristic to place a split plane.               LH2'24|
-//  +-----------------------------------------------------------------------------+
-float BVH::FindBestSplitPlane( BVHNode& node, int& axis, int& splitPos, float3& centroidMin, float3& centroidMax )
-{
-	float bestCost = 1e30f;
-	for (int a = 0; a < 3; a++)
-	{
-		float boundsMin = centroidMin[a], boundsMax = centroidMax[a];
-		if (boundsMin == boundsMax) continue;
-		// populate the bins
-		float scale = BVHBINS / (boundsMax - boundsMin);
-		float leftCountArea[BVHBINS - 1], rightCountArea[BVHBINS - 1];
-		int leftSum = 0, rightSum = 0;
-		struct Bin { aabb bounds; int triCount = 0; } bin[BVHBINS];
-		for (uint i = 0; i < node.triCount; i++)
-		{
-			uint idx = triIdx[node.leftFirst + i], vertIdx = idx * 3;
-			int binIdx = min( BVHBINS - 1, (int)((centroid[idx][a] - boundsMin) * scale) );
-			bin[binIdx].triCount++;
-			bin[binIdx].bounds.Grow( tris[vertIdx] );
-			bin[binIdx].bounds.Grow( tris[vertIdx + 1] );
-			bin[binIdx].bounds.Grow( tris[vertIdx + 2] );
-		}
-		// gather data for the 7 planes between the 8 bins
-		aabb leftBox, rightBox;
-		for (int i = 0; i < BVHBINS - 1; i++)
-		{
-			leftSum += bin[i].triCount;
-			leftBox.Grow( bin[i].bounds );
-			leftCountArea[i] = leftSum * leftBox.Area();
-			rightSum += bin[BVHBINS - 1 - i].triCount;
-			rightBox.Grow( bin[BVHBINS - 1 - i].bounds );
-			rightCountArea[BVHBINS - 2 - i] = rightSum * rightBox.Area();
-		}
-		// calculate SAH cost for the 7 planes
-		scale = (boundsMax - boundsMin) / BVHBINS;
-		for (int i = 0; i < BVHBINS - 1; i++)
-		{
-			const float planeCost = leftCountArea[i] + rightCountArea[i];
-			if (planeCost < bestCost)
-				axis = a, splitPos = i + 1, bestCost = planeCost;
-		}
-	}
-	return bestCost;
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::UpdateNodeBounds                                                      |
-//  |  Update node AABB so all triangles fit in it.                         LH2'24|
-//  +-----------------------------------------------------------------------------+
-void BVH::UpdateNodeBounds( const uint nodeIdx, float3& centroidMin, float3& centroidMax )
-{
-	BVHNode& node = bvhNode[nodeIdx];
-	float4 aabbMin( 1e30f ), aabbMax( -1e30f );
-	float4 midMin( 1e30f ), midMax( -1e30f );
-	for (uint first = node.leftFirst, i = 0; i < node.triCount; i++)
-	{
-		uint leafTriIdx = triIdx[first + i];
-		uint vertIdx = leafTriIdx * 3;
-		aabbMin = fminf( aabbMin, tris[vertIdx] );
-		aabbMin = fminf( aabbMin, tris[vertIdx + 1] );
-		aabbMin = fminf( aabbMin, tris[vertIdx + 2] );
-		aabbMax = fmaxf( aabbMax, tris[vertIdx] );
-		aabbMax = fmaxf( aabbMax, tris[vertIdx + 1] );
-		aabbMax = fmaxf( aabbMax, tris[vertIdx + 2] );
-		midMin = fminf( midMin, centroid[leafTriIdx] );
-		midMax = fmaxf( midMax, centroid[leafTriIdx] );
-	}
-	node.aabbMin = aabbMin, centroidMin = midMin;
-	node.aabbMax = aabbMax, centroidMax = midMax;
+#endif
 }

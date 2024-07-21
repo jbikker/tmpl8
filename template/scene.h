@@ -120,31 +120,31 @@ public:
 };
 
 //  +-----------------------------------------------------------------------------+
-//  |  BVH                                                                        |
+//  |  BVH class (and supporting structs)                                         |
 //  |  Bounding Volume Hierarchy.                                           LH2'24|
 //  +-----------------------------------------------------------------------------+
+#pragma warning(disable:4201) // suppress nameless struct / union warning
+struct Intersection
+{
+	float t, u, v;	// distance along ray & barycentric coordinates of the intersection
+	uint prim;		// primitive index
+};
+struct Ray
+{
+	Ray() { O4 = D4 = rD4 = float4( 1 ); }
+	Ray( float3 origin, float3 direction, float t = 1e30f )
+	{
+		O = origin, D = direction, rD = safercp( D );
+		hit.t = t;
+	}
+	union { struct { float3 O; float dummy1; }; float4 O4; };
+	union { struct { float3 D; float dummy2; }; float4 D4; };
+	union { struct { float3 rD; float dummy3; }; float4 rD4; };
+	Intersection hit; // total ray size: 64 bytes
+};
 class BVH
 {
 public:
-	struct Intersection
-	{
-		float t, u, v;	// distance along ray & barycentric coordinates of the intersection
-		uint prim;		// primitive index
-	};
-#pragma warning(disable:4201) // suppress nameless struct / union warning
-	struct Ray
-	{
-		Ray() { O4 = D4 = rD4 = float4( 1 ); }
-		Ray( float3 origin, float3 direction, float t = 1e30f )
-		{
-			O = origin, D = direction, rD = safercp( D );
-			hit.t = t;
-		}
-		union { struct { float3 O; float dummy1; }; float4 O4; };
-		union { struct { float3 D; float dummy2; }; float4 D4; };
-		union { struct { float3 rD; float dummy3; }; float4 rD4; };
-		Intersection hit; // total ray size: 64 bytes
-	};
 	struct BVHNode
 	{
 		float3 aabbMin; uint leftFirst;
@@ -158,7 +158,8 @@ public:
 		}
 	};
 	BVH() = default;
-	void Build( class Mesh* mesh );
+	void Build( class Mesh* mesh, uint cap = 999999999 );
+	void Refit();
 	void Intersect( Ray& ray );
 private:
 	void Subdivide( uint nodeIdx, uint depth, uint& nodePtr, float3& centroidMin, float3& centroidMax );
@@ -198,7 +199,9 @@ public:
 	void BuildMaterialList();
 	void SetPose( const vector<float>& weights );
 	void SetPose( const Skin* skin );
-	void UpdateBVH() { bvh.Build( this ); }
+	void UpdateBVH();
+	void UpdateWorldBounds();
+	void Intersect( Ray& ray );
 	// data members
 	string name = "unnamed";			// name for the mesh						
 	int ID = -1;						// unique ID for the mesh: position in mesh array
@@ -213,8 +216,10 @@ public:
 	vector<Pose> poses;					// morph target data
 	bool isAnimated;					// true when this mesh has animation data
 	bool excludeFromNavmesh = false;	// prevents mesh from influencing navmesh generation (e.g. curtains)
-	BVH bvh;							// bounding volume hierarchy for ray tracing
+	mat4 transform, invTransform;		// copy of combined transform of parent node, for TLAS construction
 	TRACKCHANGES;						// add Changed(), MarkAsDirty() methods, see system.h
+	aabb worldBounds;					// mesh bounds transformed by the transform of the parent node, for TLAS builds
+	BVH* bvh = 0;						// bounding volume hierarchy for ray tracing; excluded from change tracking.
 };
 
 //  +-----------------------------------------------------------------------------+
@@ -231,7 +236,7 @@ public:
 	~Node();
 	// methods
 	void ConvertFromGLTFNode( const tinygltf::Node& gltfNode, const int nodeBase, const int meshBase, const int skinBase );
-	bool Update( mat4& T, vector<int>& instances, int& instanceIdx );	// recursively update the transform of this node and its children
+	void Update( const mat4& T );		// recursively update the transform of this node and its children
 	void UpdateTransformFromTRS();		// process T, R, S data to localTransform
 	void PrepareLights();				// create light trianslges from detected emissive triangles
 	void UpdateLights();				// fix light triangles when the transform changes
@@ -365,6 +370,7 @@ class Animation
 		int nodeIdx;					// index of the node this channel affects
 		int target;						// 0: translation, 1: rotation, 2: scale, 3: weights
 		void Reset() { t = 0, k = 0; }
+		void SetTime( const float v ) { t = v, k = 0; }
 		void Update( const float t, const Sampler* sampler );	// apply this channel to the target nde for time t
 		void ConvertFromGLTFChannel( const tinygltf::AnimationChannel& gltfChannel, const int nodeBase );
 		// data
@@ -376,6 +382,7 @@ public:
 	vector<Sampler*> sampler;			// animation samplers
 	vector<Channel*> channel;			// animation channels
 	void Reset();						// reset all channels
+	void SetTime( const float t );
 	void Update( const float dt );		// advance and apply all channels
 	void ConvertFromGLTFAnim( tinygltf::Animation& gltfAnim, tinygltf::Model& gltfModel, const int nodeBase );
 };
@@ -532,7 +539,6 @@ public:
 	static void ResetAnimation( const int animId );
 	static void UpdateAnimation( const int animId, const float dt );
 	static int AnimationCount() { return (int)animations.size(); }
-	static void UpdateBVH();
 	// scene construction / maintenance
 	static int AddMesh( Mesh* mesh );
 	static int AddMesh( const char* objFile, const char* dir, const float scale = 1.0f, const bool flatShaded = false );
@@ -550,6 +556,9 @@ public:
 	static int AddPointLight( const float3 pos, const float3 radiance );
 	static int AddSpotLight( const float3 pos, const float3 direction, const float inner, const float outer, const float3 radiance );
 	static int AddDirectionalLight( const float3 direction, const float3 radiance );
+	// scene graph / TLAS operations
+	static void UpdateSceneGraph( const float deltaTime );
+	static void Intersect( Ray& ray );
 	// data members
 	static inline vector<int> rootNodes;						// root node indices of loaded (or instanced) objects
 	static inline vector<Node*> nodePool;						// all scene nodes
@@ -563,8 +572,7 @@ public:
 	static inline vector<SpotLight*> spotLights;				// scene spot lights
 	static inline vector<DirectionalLight*> directionalLights;	// scene directional lights
 	static inline SkyDome* sky;									// HDR skydome
-private:
-	static inline int nodeListHoles;	// zero if no instance deletions occurred; adding instances will be faster.
+	static inline BVH tlas;										// top-level acceleration structure
 };
 
 }
