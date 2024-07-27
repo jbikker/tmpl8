@@ -198,9 +198,9 @@ unsigned int* Buffer::GetHostPtr()
 	return hostBuffer;
 }
 
-// CopyToDevice method
+// CopyToDevice methods
 // ----------------------------------------------------------------------------
-void Buffer::CopyToDevice( bool blocking )
+void Buffer::CopyToDevice( const bool blocking )
 {
 	cl_int error;
 	if (!hostBuffer)
@@ -211,10 +211,21 @@ void Buffer::CopyToDevice( bool blocking )
 	}
 	CHECKCL( error = clEnqueueWriteBuffer( Kernel::GetQueue(), deviceBuffer, blocking, 0, size, hostBuffer, 0, 0, 0 ) );
 }
+void Buffer::CopyToDevice( const int offset, const int byteCount, const bool blocking )
+{
+	cl_int error;
+	if (!hostBuffer)
+	{
+		hostBuffer = (uint*)MALLOC64( size );
+		ownData = true;
+		aligned = true;
+	}
+	CHECKCL( error = clEnqueueWriteBuffer( Kernel::GetQueue(), deviceBuffer, blocking, offset, byteCount, hostBuffer, 0, 0, 0 ) );
+}
 
 // CopyToDevice2 method (uses 2nd queue)
 // ----------------------------------------------------------------------------
-void Buffer::CopyToDevice2( bool blocking, cl_event* eventToSet, const size_t s )
+void Buffer::CopyToDevice2( const bool blocking, cl_event* eventToSet, const size_t s )
 {
 	cl_int error;
 	CHECKCL( error = clEnqueueWriteBuffer( Kernel::GetQueue2(), deviceBuffer, blocking ? CL_TRUE : CL_FALSE, 0, s == 0 ? size : s, hostBuffer, 0, 0, eventToSet ) );
@@ -222,7 +233,7 @@ void Buffer::CopyToDevice2( bool blocking, cl_event* eventToSet, const size_t s 
 
 // CopyFromDevice method
 // ----------------------------------------------------------------------------
-void Buffer::CopyFromDevice( bool blocking )
+void Buffer::CopyFromDevice( const bool blocking )
 {
 	cl_int error;
 	if (!hostBuffer)
@@ -232,6 +243,17 @@ void Buffer::CopyFromDevice( bool blocking )
 		aligned = true;
 	}
 	CHECKCL( error = clEnqueueReadBuffer( Kernel::GetQueue(), deviceBuffer, blocking, 0, size, hostBuffer, 0, 0, 0 ) );
+}
+void Buffer::CopyFromDevice( const int offset, const int byteCount, const bool blocking )
+{
+	cl_int error;
+	if (!hostBuffer)
+	{
+		hostBuffer = (uint*)MALLOC64( size );
+		ownData = true;
+		aligned = true;
+	}
+	CHECKCL( error = clEnqueueReadBuffer( Kernel::GetQueue(), deviceBuffer, blocking, offset, byteCount, hostBuffer, 0, 0, 0 ) );
 }
 
 // CopyTo
@@ -255,7 +277,21 @@ void Buffer::Clear()
 Kernel::Kernel( char* file, char* entryPoint )
 {
 	if (!clStarted) InitCL();
+	// see if we have seen this source file before
+	for( int s = (int)loadedKernels.size(), i = 0; i < s; i++ )
+	{
+		if (!_stricmp( file, loadedKernels[i]->sourceFile))
+		{
+			cl_int error;
+			program = loadedKernels[i]->program;
+			kernel = clCreateKernel( program, entryPoint, &error );
+			CHECKCL( error );
+			return;
+		}
+	}
 	// load a cl file
+	sourceFile = new char[strlen( file ) + 1];
+	strcpy( sourceFile, file );
 	string csText = TextFileRead( file );
 	if (csText.size() == 0) FatalError( "File %s not found", file );
 	// add vendor defines
@@ -278,7 +314,7 @@ Kernel::Kernel( char* file, char* entryPoint )
 	// -cl-no-subgroup-ifp ? fails on nvidia.
 #if 1
 	// AMD-compatible compilation, thanks Rosalie de Winther
-	error = clBuildProgram( program, 0, NULL, "-cl-fast-relaxed-math -cl-mad-enable -cl-single-precision-constant", NULL, NULL );
+	error = clBuildProgram( program, 0, NULL, "-cl-std=CL2.0 -cl-fast-relaxed-math -cl-mad-enable -cl-single-precision-constant", NULL, NULL );
 #else
 	error = clBuildProgram( program, 0, NULL, "-cl-nv-verbose -cl-fast-relaxed-math -cl-mad-enable -cl-single-precision-constant", NULL, NULL );
 #endif
@@ -319,6 +355,7 @@ Kernel::Kernel( char* file, char* entryPoint )
 	kernel = clCreateKernel( program, entryPoint, &error );
 	if (kernel == 0) FatalError( "clCreateKernel failed: entry point not found." );
 	CHECKCL( error );
+	loadedKernels.push_back( this );
 }
 
 Kernel::Kernel( cl_program& existingProgram, char* entryPoint )

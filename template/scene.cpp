@@ -811,8 +811,10 @@ void Mesh::UpdateWorldBounds()
 	worldBounds.Reset();
 	float3 bmin = bvh->bvhNode[0].aabbMin, bmax = bvh->bvhNode[0].aabbMax;
 	for (int i = 0; i < 8; i++)
-		worldBounds.Grow( TransformPosition( float3( i & 1 ? bmax.x : bmin.x,
-			i & 2 ? bmax.y : bmin.y, i & 4 ? bmax.z : bmin.z ), transform ) );
+	{
+		float3 corner( i & 1 ? bmax.x : bmin.x, i & 2 ? bmax.y : bmin.y, i & 4 ? bmax.z : bmin.z );
+		worldBounds.Grow( TransformPosition( corner, transform ) );
+	}
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -1262,7 +1264,11 @@ void Animation::Sampler::ConvertFromGLTFSampler( const tinygltf::AnimationSample
 		case TINYGLTF_COMPONENT_TYPE_SHORT: for (int k = 0; k < N; k++, b += 2) fdata.push_back( max( *((char*)b) / 32767.0f, -1.0f ) ); break;
 		case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: for (int k = 0; k < N; k++, b += 2) fdata.push_back( *((char*)b) / 65535.0f ); break;
 		}
-		for (int i = 0; i < outputAccessor.count; i++) vec4Key.push_back( quat( fdata[i * 4 + 3], fdata[i * 4], fdata[i * 4 + 1], fdata[i * 4 + 2] ) );
+		for (int i = 0; i < outputAccessor.count; i++) 
+		{
+			for( int j = 0; j < 4; j++ ) if (fpclassify(fdata[i * 4 + j]) == FP_SUBNORMAL) fdata[i * 4 + j] = 0;
+			vec4Key.push_back( quat( fdata[i * 4 + 3], fdata[i * 4], fdata[i * 4 + 1], fdata[i * 4 + 2] ) );
+		}
 	}
 	else assert( false );
 }
@@ -1351,7 +1357,6 @@ quat Animation::Sampler::SampleQuat( float currentTime, int k ) const
 		key.normalize();
 		break;
 	};
-	key.normalize();
 	return key;
 }
 
@@ -1386,8 +1391,8 @@ void Animation::Channel::Update( const float dt, const Sampler* sampler )
 {
 	// advance animation timer
 	t += dt;
-	int keyCount = (int)sampler->t.size();
-	float animDuration = sampler->t[keyCount - 1];
+	const int keyCount = (int)sampler->t.size();
+	const float animDuration = sampler->t[keyCount - 1];
 	if (animDuration == 0 /* book scene */ || keyCount == 1 /* bird */)
 	{
 		if (target == 0) // translation
@@ -1417,10 +1422,6 @@ void Animation::Channel::Update( const float dt, const Sampler* sampler )
 	{
 		while (t >= animDuration) t -= animDuration, k = 0;
 		while (t >= sampler->t[(k + 1) % keyCount]) k++;
-		// determine interpolation parameters
-		assert( k < keyCount - 1 );
-		assert( t >= 0 && t < animDuration );
-		assert( t < sampler->t[k + 1] );
 		// apply anination key
 		if (target == 0) // translation
 		{
@@ -2261,23 +2262,42 @@ int Scene::AddQuad( float3 N, const float3 pos, const float width, const float h
 //  |  Scene::AddInstance                                                         |
 //  |  Add an instance of an existing mesh to the scene.                    LH2'24|
 //  +-----------------------------------------------------------------------------+
-int Scene::AddInstance( Node* newNode )
+int Scene::AddInstance( const int nodeId )
 {
-	// insert the new node at the end of the list
+	const uint instId = (uint)rootNodes.size();
+	rootNodes.push_back( nodeId );
+	return instId;
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Scene::AddNode                                                             |
+//  |  Add a node to the scene.                                             LH2'24|
+//  +-----------------------------------------------------------------------------+
+int Scene::AddNode( Node* newNode )
+{
 	newNode->ID = (int)nodePool.size();
 	nodePool.push_back( newNode );
-	rootNodes.push_back( newNode->ID );
 	return newNode->ID;
 }
 
 //  +-----------------------------------------------------------------------------+
-//  |  Scene::AddInstance                                                         |
-//  |  Add an instance of an existing mesh to the scene.                    LH2'24|
+//  |  Scene::AddChildNode                                                        |
+//  |  Add a child to a node.                                               LH2'24|
 //  +-----------------------------------------------------------------------------+
-int Scene::AddInstance( const int meshId, const mat4& transform )
+int Scene::AddChildNode( const int parentNodeId, const int childNodeId )
 {
-	Node* newNode = new Node( meshId, transform );
-	return AddInstance( newNode );
+	const int childIdx = (int)nodePool[parentNodeId]->childIdx.size();
+	nodePool[parentNodeId]->childIdx.push_back( childNodeId );
+	return childIdx;
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Scene::GetChildId                                                          |
+//  |  Get the node index of a child of a node.                             LH2'24|
+//  +-----------------------------------------------------------------------------+
+int Scene::GetChildId( const int parentId, const int childIdx )
+{
+	return nodePool[parentId]->childIdx[childIdx];
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -2571,11 +2591,94 @@ void Scene::UpdateSceneGraph( const float deltaTime )
 	for (uint i = 0; i < blasCount; i++)
 	{
 		m.vertices[i * 3 + 0] = meshPool[i]->worldBounds.bmin3;
-		m.vertices[i * 3 + 1] = meshPool[i]->worldBounds.bmax3;
-		m.vertices[i * 3 + 2] = (meshPool[i]->worldBounds.bmin3 + meshPool[i]->worldBounds.bmax3) * 0.5f;
+		m.vertices[i * 3 + 1] = m.vertices[i * 3 + 2] = meshPool[i]->worldBounds.bmax3;
 	}
 	tlas.Build( &m, blasCount );
 }
+
+#ifdef ENABLE_OPENCL_BVH
+
+//  +-----------------------------------------------------------------------------+
+//  |  Scene::InitializeGPUData                                                   |
+//  |  Gather tlas and blas data and store it in OpenCL buffers.                  |
+//  |  Note: The scene layout is assumed to be finalized at this point; adding    |
+//  |  meshes or changing mesh polygon counts will require more work.       LH2'24|
+//  +-----------------------------------------------------------------------------+
+void Scene::InitializeGPUData()
+{
+	// force bvh build so we have data to copy to GPU
+	UpdateSceneGraph( 0 );
+	// figure out how many BVH nodes and indices we have in total
+	int nodeCount = 0, idxCount = 0;
+	for( int s = (int)meshPool.size(), i = 0; i < s; i++ ) 
+		nodeCount += meshPool[i]->bvh->nodesUsed,
+		idxCount += (int)meshPool[i]->vertices.size() / 3; 
+	nodeCount += tlas.nodesUsed;
+	idxCount += (int)meshPool.size();
+	// allocate buffers for GPU data
+	bvhNodeData = new Buffer( nodeCount * sizeof( BVH::BVHNode ) );
+	triangleData = new Buffer( idxCount * 3 * sizeof( float4 ) );
+	triangleIdxData = new Buffer( idxCount * sizeof( uint ) );
+	offsetData = new Buffer( (int)meshPool.size() * sizeof( uint4 ) );
+	transformData = new Buffer( (int)meshPool.size() * 2 * sizeof( mat4 ) );
+	// populate the buffers
+	uchar* bvhPtr = (uchar*)bvhNodeData->GetHostPtr();
+	uchar* triPtr = (uchar*)triangleData->GetHostPtr();
+	uchar* idxPtr = (uchar*)triangleIdxData->GetHostPtr();
+	uint4* offset = (uint4*)offsetData->GetHostPtr();
+	memcpy( bvhPtr, tlas.bvhNode, tlas.nodesUsed * sizeof( BVH::BVHNode ) );
+	memcpy( idxPtr, tlas.triIdx, meshPool.size() * sizeof( uint ) );
+	bvhPtr += 2 * (int)meshPool.size() * sizeof( BVH::BVHNode );
+	idxPtr += (int)meshPool.size() * sizeof( uint );
+	for( int s = (int)meshPool.size(), i = 0; i < s; i++ ) 
+	{
+		Mesh* mesh = meshPool[i];
+		memcpy( bvhPtr, mesh->bvh->bvhNode, mesh->bvh->nodesUsed * 32 );  
+		memcpy( idxPtr, mesh->bvh->triIdx, ((int)mesh->vertices.size() / 3) * 4 );
+		memcpy( triPtr, mesh->vertices.data(), (int)mesh->vertices.size() * 16 ); 
+		offset[i] = uint4( 
+			(int)(bvhPtr - (uchar*)bvhNodeData->GetHostPtr()) / 16, 
+			(int)(idxPtr - (uchar*)triangleIdxData->GetHostPtr()) / 4, 
+			(int)(triPtr - (uchar*)triangleData->GetHostPtr()) / 16, 0 
+		);
+		memcpy( transformData->GetHostPtr() + i * 32, &mesh->transform, 64 ); 
+		memcpy( transformData->GetHostPtr() + i * 32 + 16, &mesh->invTransform, 64 ); 
+		bvhPtr += mesh->bvh->nodesUsed * 32;
+		idxPtr += ((int)mesh->vertices.size() / 3) * 4;
+		triPtr += (int)mesh->vertices.size() * 16;
+	}
+	// send the data to the gpu
+	bvhNodeData->CopyToDevice();
+	triangleData->CopyToDevice();
+	triangleIdxData->CopyToDevice();
+	offsetData->CopyToDevice();
+	transformData->CopyToDevice();
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Scene::UpdateGPUData                                                       |
+//  |  Synchronize TLAS and transform changes to the GPU.                         |
+//  |  Note that this only handles scene with rigid animation.              LH2'24|
+//  +-----------------------------------------------------------------------------+
+void Scene::UpdateGPUData()
+{
+	// tlas and matrices will be synced each frame
+	uchar* idxPtr = (uchar*)triangleIdxData->GetHostPtr();
+	uchar* bvhPtr = (uchar*)bvhNodeData->GetHostPtr();
+	memcpy( bvhPtr, tlas.bvhNode, tlas.nodesUsed * 32 );
+	memcpy( idxPtr, tlas.triIdx, meshPool.size() * 4 );
+	for( int s = (int)meshPool.size(), i = 0; i < s; i++ ) 
+	{
+		memcpy( transformData->GetHostPtr() + i * 32, &meshPool[i]->transform, 64 ); 
+		memcpy( transformData->GetHostPtr() + i * 32 + 16, &meshPool[i]->invTransform, 64 ); 
+	}
+	// send the data to the gpu
+	bvhNodeData->CopyToDevice( 0, tlas.nodesUsed * 32 /* just the tlas */ );
+	triangleIdxData->CopyToDevice( 0, (int)meshPool.size() * 4 /* just the tlas */ );
+	transformData->CopyToDevice();
+}
+
+#endif
 
 //  +-----------------------------------------------------------------------------+
 //  |  Scene::Intersect                                                           |
@@ -2583,11 +2686,6 @@ void Scene::UpdateSceneGraph( const float deltaTime )
 //  +-----------------------------------------------------------------------------+
 void Scene::Intersect( Ray& ray )
 {
-#if 1
-	// brute force
-	for (int s = (int)meshPool.size(), i = 0; i < s; i++)
-		meshPool[i]->Intersect( ray );
-#else
 	// use a local stack instead of a recursive function
 	BVH::BVHNode* node = &tlas.bvhNode[0], * stack[128];
 	uint stackPtr = 0;
@@ -2599,7 +2697,10 @@ void Scene::Intersect( Ray& ray )
 			// current node is a leaf: intersect BLAS
 			int blasCount = node->triCount;
 			for (int i = 0; i < blasCount; i++)
-				meshPool[node->leftFirst + i]->Intersect( ray );
+			{
+				const uint meshIdx = tlas.triIdx[node->leftFirst + i];
+				meshPool[meshIdx]->Intersect( ray );
+			}
 			// pop a node from the stack; terminate if none left
 			if (stackPtr == 0) break; else node = stack[--stackPtr];
 			continue;
@@ -2619,5 +2720,4 @@ void Scene::Intersect( Ray& ray )
 			if (dist2 != 1e30f) stack[stackPtr++] = child2;
 		}
 	}
-#endif
 }

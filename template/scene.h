@@ -4,6 +4,8 @@
 
 #pragma once
 
+#define ENABLE_OPENCL_BVH
+
 // LIGHTHOUSE 2 SCENE MANAGEMENT CODE - QUICK OVERVIEW
 //
 // This file defines the data structures for the Lighthouse 2 scene graph. 
@@ -548,8 +550,10 @@ public:
 	static int AddMesh( const int triCount );
 	static void AddTriToMesh( const int meshId, const float3& v0, const float3& v1, const float3& v2, const int matId );
 	static int AddQuad( const float3 N, const float3 pos, const float width, const float height, const int matId, const int meshID = -1 );
-	static int AddInstance( Node* node );
-	static int AddInstance( const int meshId, const mat4& transform );
+	static int AddNode( Node* node );
+	static int AddChildNode( const int parentNodeId, const int childNodeId );
+	static int GetChildId( const int parentId, const int childIdx );
+	static int AddInstance( const int nodeId );
 	static void RemoveNode( const int instId );
 	static int AddMaterial( Material* material );
 	static int AddMaterial( const float3 color, const char* name = 0 );
@@ -573,6 +577,17 @@ public:
 	static inline vector<DirectionalLight*> directionalLights;	// scene directional lights
 	static inline SkyDome* sky;									// HDR skydome
 	static inline BVH tlas;										// top-level acceleration structure
+#ifdef ENABLE_OPENCL_BVH
+	// OpenCL buffers for transferring data from CPU to GPU
+	static inline Buffer* bvhNodeData;							// tlas and blas node data
+	static inline Buffer* triangleData;							// triangle data
+	static inline Buffer* triangleIdxData;						// triangle index arrays
+	static inline Buffer* offsetData;							// blas offsets
+	static inline Buffer* transformData;						// blas transforms
+	// methods
+	static void InitializeGPUData();
+	static void UpdateGPUData();
+#endif
 };
 
 }
