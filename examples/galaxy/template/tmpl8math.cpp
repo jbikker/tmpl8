@@ -132,6 +132,14 @@ float noise3D( const float x, const float y, const float z )
 }
 
 // math implementations
+int3::int3( const float3& a )
+{
+	x = (int)a.x, y = (int)a.y, z = (int)a.z;
+}
+uint3::uint3( const float3& a )
+{
+	x = (uint)a.x, y = (uint)a.y, z = (uint)a.z;
+}
 float4::float4( const float3& a, const float d )
 {
 	x = a.x, y = a.y, z = a.z;
@@ -236,4 +244,18 @@ float3 TransformVector_SSE( const __m128& a, const mat4& M )
 	_MM_TRANSPOSE4_PS( v0, v1, v2, v3 );
 	__m128 v = _mm_add_ps( _mm_add_ps( v0, v1 ), v2 );
 	return float3( v.m128_f32[0], v.m128_f32[1], v.m128_f32[2] );
+}
+
+// 16-bit floats
+uint as_uint( const float x ) { return *(uint*)&x; }
+float as_float( const uint x ) { return *(float*)&x; }
+float half_to_float( const half x )
+{
+	const uint e = (x & 0x7C00) >> 10, m = (x & 0x03FF) << 13, v = as_uint( (float)m ) >> 23;
+	return as_float( (x & 0x8000) << 16 | (e != 0) * ((e + 112) << 23 | m) | ((e == 0) & (m != 0)) * ((v - 37) << 23 | ((m << (150 - v)) & 0x007FE000)) );
+}
+half float_to_half( const float x )
+{
+	const uint b = as_uint( x ) + 0x00001000, e = (b & 0x7F800000) >> 23, m = b & 0x007FFFFF;
+	return (half)((b & 0x80000000) >> 16 | (e > 112) * ((((e - 112) << 10) & 0x7C00) | m >> 13) | ((e < 113) & (e > 101)) * ((((0x007FF000 + m) >> (125 - e)) + 1) >> 1) | (e > 143) * 0x7FFF); // sign : normalized : denormalized : saturate
 }

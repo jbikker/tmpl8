@@ -27,6 +27,7 @@
 typedef unsigned char uchar;
 typedef unsigned int uint;
 typedef unsigned short ushort;
+typedef unsigned short half;
 
 // "leak" common namespaces to all compilation units. This is not standard // C++ practice 
 // but a deliberate simplification for template projects. Feel free to remove this if it
@@ -307,7 +308,7 @@ public:
 // render changed sprites, or to save only changed objects to disk.
 #define UINT64C(x) ((uint64_t) x##ULL)
 #define CLEARCRC64 (UINT64C( 0xffffffffffffffff ))
-const uint64_t crc64_table[256] = { 
+const uint64_t crc64_table[256] = {
 	UINT64C( 0x0000000000000000 ), UINT64C( 0x42F0E1EBA9EA3693 ), UINT64C( 0x85E1C3D753D46D26 ), UINT64C( 0xC711223CFA3E5BB5 ),
 	UINT64C( 0x493366450E42ECDF ), UINT64C( 0x0BC387AEA7A8DA4C ), UINT64C( 0xCCD2A5925D9681F9 ), UINT64C( 0x8E224479F47CB76A ),
 	UINT64C( 0x9266CC8A1C85D9BE ), UINT64C( 0xD0962D61B56FEF2D ), UINT64C( 0x17870F5D4F51B498 ), UINT64C( 0x5577EEB6E6BB820B ),
@@ -383,15 +384,16 @@ __inline uint64_t calccrc64( unsigned char* pbData, int len ) // crc64, from htt
 		crc = crc64_table[t] ^ (crc << 8);
 	return crc ^ CLEARCRC64;
 }
-#define TRACKCHANGES public: bool Changed() { uint64_t currentcrc = crc64; \
-crc64 = CLEARCRC64; uint64_t newcrc = calccrc64( (uchar*)this, sizeof( *this ) ); \
-bool changed = newcrc != currentcrc; crc64 = newcrc; return changed; } \
-bool IsDirty() { uint64_t t = crc64; bool c = Changed(); crc64 = t; return c; } \
-void MarkAsDirty() { dirty++; } \
+#define TRACKCHANGES public: bool Changed() { uint64_t currentcrc = __crc64; \
+__crc64 = CLEARCRC64; uint64_t newcrc = calccrc64( (uchar*)this, (int)(__int64( &__dirty ) + 4 - __int64( this )) ); \
+bool changed = newcrc != currentcrc; __crc64 = newcrc; return changed; } \
+bool IsDirty() { uint64_t t = __crc64; bool c = Changed(); __crc64 = t; return c; } \
+void MarkAsDirty() { __dirty++; } \
 void MarkAsNotDirty() { Changed(); } \
-private: uint64_t crc64 = CLEARCRC64; uint dirty = 0;
+private: uint64_t __crc64 = CLEARCRC64; uint __dirty = 0; public:
 
 // scene graph management
+#include "bvh.h"
 #include "scene.h"
 
 // application base class

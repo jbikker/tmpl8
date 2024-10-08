@@ -99,7 +99,7 @@ void Game::HandleInput()
 // -----------------------------------------------------------
 // Main application tick function
 // -----------------------------------------------------------
-void Game::Tick( float deltaTime )
+void Game::Tick( float )
 {
 	// advance the simulation
 	Simulate();

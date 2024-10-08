@@ -4,6 +4,8 @@
 
 #pragma once
 
+#define ENABLE_OPENCL_BVH
+
 // LIGHTHOUSE 2 SCENE MANAGEMENT CODE - QUICK OVERVIEW
 //
 // This file defines the data structures for the Lighthouse 2 scene graph. 
@@ -41,19 +43,19 @@
 #define MIPLEVELCOUNT		5
 #define BINTEXFILEVERSION	0x10001001
 #define CACHEIMAGES
-#define BVHBINS				8
 
 namespace Tmpl8
 {
 
 //  +-----------------------------------------------------------------------------+
 //  |  FatTri                                                                     |
-//  |  Full LH2 triangle data (for shading only).                           LH2'24|
+//  |  Full triangle data (for shading only), carefully layed out.          LH2'24|
 //  +-----------------------------------------------------------------------------+
 class FatTri
 {
 public:
 	FatTri() { memset( this, 0, sizeof( FatTri ) ); ltriIdx = -1; }
+	// 128 bytes of data needed for basic shading with texture and normal interpolation.
 	float u0, u1, u2;					// 12 bytes for layer 0 texture coordinates
 	int ltriIdx;						// 4, set only for emissive triangles, used for MIS
 	float v0, v1, v2;					// 12 bytes for layer 0 texture coordinates
@@ -64,21 +66,19 @@ public:
 	float Ny;							// 4 bytes for y-component of geometric triangle normal
 	float3 vN2;							// 12 bytes for vertex2 normal
 	float Nz;							// 4 bytes for z-component of geometric triangle normal
+	float3 vertex0; float u0_2;			// vertex 0 position + second layer u0
+	float3 vertex1; float u1_2;			// vertex 1 position + second layer u1
+	float3 vertex2; float u2_2;			// vertex 2 position + second layer u2
+	// 64 bytes of data needed for normal mapping, anisotropic, multi-texture etc.
 	float3 T;							// 12 bytes for tangent vector
 	float area;							// 4 bytes for triangle area
 	float3 B;							// 12 bytes for bitangent vector
 	float invArea;						// 4 bytes for reciprocal triangle area
 	float3 alpha;						// better spot than vertex0..2.w for reasons
 	float LOD;							// for MIP mapping
-	float3 vertex0; float dummy0;		// vertex 0 position
-	float3 vertex1; float dummy1;		// vertex 1 position
-	float3 vertex2; float dummy2;		// vertex 2 position
-	// 2nd set of uv coordinates
-	float u1_0, u1_1, u1_2;				// 12 bytes for layer 1 texture coordinates
-	float dummy3;						// padding
-	float v1_0, v1_1, v1_2;				// 12 bytes for layer 1 texture coordinates
+	float v0_2, v1_2, v2_2;				// 12 bytes for second layer texture coordinates
 	float dummy4;						// padding
-	// total: 13 * 16 = 208 bytes.
+	// total FatTri size: 192 bytes.
 	void UpdateArea()
 	{
 		const float a = length( vertex1 - vertex0 ), b = length( vertex2 - vertex1 );
@@ -96,6 +96,7 @@ class SkyDome
 public:
 	// constructor / destructor
 	SkyDome() = default;
+	SkyDome( const char* file ) { Load( file ); }
 	void Load( const char* filename, const float3 scale = { 1.f, 1.f, 1.f } );
 	// public data members
 	float3* pixels = nullptr;			// HDR texture data for sky dome
@@ -117,60 +118,6 @@ public:
 	int skeletonRoot = 0;
 	vector<mat4> inverseBindMatrices, jointMat;
 	vector<int> joints; // node indices of the joints
-};
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH                                                                        |
-//  |  Bounding Volume Hierarchy.                                           LH2'24|
-//  +-----------------------------------------------------------------------------+
-class BVH
-{
-public:
-	struct Intersection
-	{
-		float t, u, v;	// distance along ray & barycentric coordinates of the intersection
-		uint prim;		// primitive index
-	};
-#pragma warning(disable:4201) // suppress nameless struct / union warning
-	struct Ray
-	{
-		Ray() { O4 = D4 = rD4 = float4( 1 ); }
-		Ray( float3 origin, float3 direction, float t = 1e30f )
-		{
-			O = origin, D = direction, rD = safercp( D );
-			hit.t = t;
-		}
-		union { struct { float3 O; float dummy1; }; float4 O4; };
-		union { struct { float3 D; float dummy2; }; float4 D4; };
-		union { struct { float3 rD; float dummy3; }; float4 rD4; };
-		Intersection hit; // total ray size: 64 bytes
-	};
-	struct BVHNode
-	{
-		float3 aabbMin; uint leftFirst;
-		float3 aabbMax; uint triCount;
-		bool isLeaf() const { return triCount > 0; /* empty BVH leaves do not exist */ }
-		float Intersect( const Ray& ray );
-		float CalculateNodeCost()
-		{
-			float3 e = aabbMax - aabbMin; // extent of the node
-			return (e.x * e.y + e.y * e.z + e.z * e.x) * triCount;
-		}
-	};
-	BVH() = default;
-	void Build( class Mesh* mesh );
-	void Intersect( Ray& ray );
-private:
-	void Subdivide( uint nodeIdx, uint depth, uint& nodePtr, float3& centroidMin, float3& centroidMax );
-	void UpdateNodeBounds( const uint nodeIdx, float3& centroidMin, float3& centroidMax );
-	float FindBestSplitPlane( BVHNode& node, int& axis, int& splitPos, float3& centroidMin, float3& centroidMax );
-	void IntersectTri( Ray& ray, const uint triIdx );
-public:
-	uint* triIdx = 0;
-	float4* centroid = 0;
-	uint triCount, nodesUsed;
-	BVHNode* bvhNode = 0;
-	float4* tris = 0;
 };
 
 //  +-----------------------------------------------------------------------------+
@@ -198,7 +145,9 @@ public:
 	void BuildMaterialList();
 	void SetPose( const vector<float>& weights );
 	void SetPose( const Skin* skin );
-	void UpdateBVH() { bvh.Build( this ); }
+	void UpdateBVH();
+	void UpdateWorldBounds();
+	int Intersect( Ray& ray );
 	// data members
 	string name = "unnamed";			// name for the mesh						
 	int ID = -1;						// unique ID for the mesh: position in mesh array
@@ -213,8 +162,10 @@ public:
 	vector<Pose> poses;					// morph target data
 	bool isAnimated;					// true when this mesh has animation data
 	bool excludeFromNavmesh = false;	// prevents mesh from influencing navmesh generation (e.g. curtains)
-	BVH bvh;							// bounding volume hierarchy for ray tracing
+	mat4 transform, invTransform;		// copy of combined transform of parent node, for TLAS construction
 	TRACKCHANGES;						// add Changed(), MarkAsDirty() methods, see system.h
+	aabb worldBounds;					// mesh bounds transformed by the transform of the parent node, for TLAS builds
+	BVH* bvh = 0;						// bounding volume hierarchy for ray tracing; excluded from change tracking.
 };
 
 //  +-----------------------------------------------------------------------------+
@@ -231,7 +182,7 @@ public:
 	~Node();
 	// methods
 	void ConvertFromGLTFNode( const tinygltf::Node& gltfNode, const int nodeBase, const int meshBase, const int skinBase );
-	bool Update( mat4& T, vector<int>& instances, int& instanceIdx );	// recursively update the transform of this node and its children
+	void Update( const mat4& T );		// recursively update the transform of this node and its children
 	void UpdateTransformFromTRS();		// process T, R, S data to localTransform
 	void PrepareLights();				// create light trianslges from detected emissive triangles
 	void UpdateLights();				// fix light triangles when the transform changes
@@ -259,20 +210,22 @@ protected:
 
 //  +-----------------------------------------------------------------------------+
 //  |  Material                                                                   |
-//  |  Material definition.                                                 LH2'24|
+//  |  Full material definition, which contains everything that can be read from  |
+//  |  a gltf file. Will need to be digested to something more practical for      |
+//  |  rendering: For that there is 'Material'.                             LH2'24|
 //  +-----------------------------------------------------------------------------+
 class Material
 {
 public:
 	enum { DISNEYBRDF = 1, LAMBERTBSDF, /* add extra here */ };
-	struct Vec3Value
+	struct Float3Value
 	{
-		// Vec3Value / ScalarValue: all material parameters can be spatially variant or invariant.
+		// Float3Value / ScalarValue: all material parameters can be spatially variant or invariant.
 		// If a map is used, this map may have an offset and scale. The map values may also be
 		// scaled, to facilitate parameter map reuse.
-		Vec3Value() = default;
-		Vec3Value( const float f ) : value( make_float3( f ) ) {}
-		Vec3Value( const float3 f ) : value( f ) {}
+		Float3Value() = default;
+		Float3Value( const float f ) : value( make_float3( f ) ) {}
+		Float3Value( const float3 f ) : value( f ) {}
 		float3 value = make_float3( 1e-32f );	// default value if map is absent; 1e-32 means: not set
 		float dummy;							// because float3 is 12 bytes.
 		int textureID = -1;						// texture ID; 'value'field is used if -1
@@ -281,7 +234,7 @@ public:
 		float2 uvoffset = make_float2( 0 );		// uv coordinate offset
 		uint2 size = make_uint2( 0 );			// texture dimensions
 		// a parameter that has not been specified has a -1 textureID and a 1e-32f value
-		bool Specified() { return (value.x != 1e32f) || (value.y != 1e32f) || (value.z != 1e32f) || (textureID != -1); }
+		bool Specified() { return value.x != 1e32f || value.y != 1e32f || value.z != 1e32f || textureID != -1; }
 		float3& operator()() { return value; }
 	};
 	struct ScalarValue
@@ -295,7 +248,7 @@ public:
 		float2 uvscale = make_float2( 1 );		// uv coordinate scale
 		float2 uvoffset = make_float2( 0 );		// uv coordinate offset
 		uint2 size = make_uint2( 0 );			// texture dimensions
-		bool Specified() { return (value != 1e32f) || (textureID != -1); }
+		bool Specified() { return value != 1e32f || textureID != -1; }
 		float& operator()() { return value; }
 	};
 	enum
@@ -311,17 +264,17 @@ public:
 	void ConvertFrom( const tinygltf::Material&, const vector<int>& texIdx );
 	bool IsEmissive() { float3& c = color(); return c.x > 1 || c.y > 1 || c.z > 1; /* ignores vec3map */ }
 	// material properties
-	Vec3Value color = Vec3Value( 1 );	// universal material property: base color
-	Vec3Value detailColor;				// universal material property: detail texture
-	Vec3Value normals;					// universal material property: normal map
-	Vec3Value detailNormals;			// universal material property: detail normal map			
+	Float3Value color = Float3Value( 1 );	// universal material property: base color
+	Float3Value detailColor;			// universal material property: detail texture
+	Float3Value normals;				// universal material property: normal map
+	Float3Value detailNormals;			// universal material property: detail normal map			
 	uint flags = SMOOTH;				// material flags: default is SMOOTH
 	// Disney BRDF properties: data for the Disney Principled BRDF
-	Vec3Value absorption, metallic, subsurface, specular, roughness, specularTint;
-	Vec3Value anisotropic, sheen, sheenTint, clearcoat, clearcoatGloss, transmission;
-	ScalarValue eta;
+	Float3Value absorption;
+	ScalarValue metallic, subsurface, specular, roughness, specularTint, anisotropic;
+	ScalarValue sheen, sheenTint, clearcoat, clearcoatGloss, transmission, eta;
 	// Lambert BSDF properties, augmented with pure specular reflection and refraction
-	// Vec3Value absorption;			// shared with disney brdf
+	// FloatValue absorption;			// shared with disney brdf
 	ScalarValue reflection, refraction, ior;
 	// identifier and name
 	string name = "unnamed";			// material name, not for unique identification
@@ -334,6 +287,48 @@ public:
 private:
 	uint prevFlags = SMOOTH;			// initially identical to flags
 	TRACKCHANGES;						// add Changed(), MarkAsDirty() methods, see system.h
+};
+
+//  +-----------------------------------------------------------------------------+
+//  |  Material                                                                   |
+//  |  Material definition. This is the version for actual rendering; it stores   |
+//  |  a subset of the full data of a Material.                             LH2'24|
+//  +-----------------------------------------------------------------------------+
+class RenderMaterial
+{
+	enum
+	{
+		HASDIFFUSEMAP = 1,
+		HASNORMALMAP = 2,
+		ISDIELECTRIC = 4,
+		HASSPECULARITYMAP = 8,
+		HASROUGHNESSMAP = 16,
+		HAS2NDNORMALMAP = 32,
+		HAS2NDDIFFUSEMAP = 64,
+		HASSMOOTHNORMALS = 128,
+		HASALPHA = 256,
+		DIFFUSEMAPISHDR = 512
+	};
+	struct Map { short width, height; half uscale, vscale, uoffs, voffs; uint addr; };
+public:
+	RenderMaterial( const Material* source, const vector<int>& offsets );
+	Map MakeMap( Material::Float3Value source, const vector<int>& offsets );
+	void SetDiffuse( float3 d )
+	{
+		diffuse_r = float_to_half( d.x );
+		diffuse_g = float_to_half( d.y );
+		diffuse_b = float_to_half( d.z );
+	}
+	void SetTransmittance( float3 t )
+	{
+		transmittance_r = float_to_half( t.x );
+		transmittance_g = float_to_half( t.y );
+		transmittance_b = float_to_half( t.z );
+	}
+	half diffuse_r, diffuse_g, diffuse_b, transmittance_r, transmittance_g, transmittance_b;
+	uint flags;
+	uint4 parameters; // 16 Disney principled BRDF parameters, 0.8 fixed point
+	Map tex0, tex1, nmap0, nmap1, smap, rmap; // total Material size: 128 bytes
 };
 
 //  +-----------------------------------------------------------------------------+
@@ -365,6 +360,7 @@ class Animation
 		int nodeIdx;					// index of the node this channel affects
 		int target;						// 0: translation, 1: rotation, 2: scale, 3: weights
 		void Reset() { t = 0, k = 0; }
+		void SetTime( const float v ) { t = v, k = 0; }
 		void Update( const float t, const Sampler* sampler );	// apply this channel to the target nde for time t
 		void ConvertFromGLTFChannel( const tinygltf::AnimationChannel& gltfChannel, const int nodeBase );
 		// data
@@ -376,6 +372,7 @@ public:
 	vector<Sampler*> sampler;			// animation samplers
 	vector<Channel*> channel;			// animation channels
 	void Reset();						// reset all channels
+	void SetTime( const float t );
 	void Update( const float dt );		// advance and apply all channels
 	void ConvertFromGLTFAnim( tinygltf::Animation& gltfAnim, tinygltf::Model& gltfModel, const int nodeBase );
 };
@@ -532,7 +529,6 @@ public:
 	static void ResetAnimation( const int animId );
 	static void UpdateAnimation( const int animId, const float dt );
 	static int AnimationCount() { return (int)animations.size(); }
-	static void UpdateBVH();
 	// scene construction / maintenance
 	static int AddMesh( Mesh* mesh );
 	static int AddMesh( const char* objFile, const char* dir, const float scale = 1.0f, const bool flatShaded = false );
@@ -542,14 +538,19 @@ public:
 	static int AddMesh( const int triCount );
 	static void AddTriToMesh( const int meshId, const float3& v0, const float3& v1, const float3& v2, const int matId );
 	static int AddQuad( const float3 N, const float3 pos, const float width, const float height, const int matId, const int meshID = -1 );
-	static int AddInstance( Node* node );
-	static int AddInstance( const int meshId, const mat4& transform );
+	static int AddNode( Node* node );
+	static int AddChildNode( const int parentNodeId, const int childNodeId );
+	static int GetChildId( const int parentId, const int childIdx );
+	static int AddInstance( const int nodeId );
 	static void RemoveNode( const int instId );
 	static int AddMaterial( Material* material );
 	static int AddMaterial( const float3 color, const char* name = 0 );
 	static int AddPointLight( const float3 pos, const float3 radiance );
 	static int AddSpotLight( const float3 pos, const float3 direction, const float inner, const float outer, const float3 radiance );
 	static int AddDirectionalLight( const float3 direction, const float3 radiance );
+	// scene graph / TLAS operations
+	static void UpdateSceneGraph( const float deltaTime );
+	static int Intersect( Ray& ray );
 	// data members
 	static inline vector<int> rootNodes;						// root node indices of loaded (or instanced) objects
 	static inline vector<Node*> nodePool;						// all scene nodes
@@ -563,8 +564,22 @@ public:
 	static inline vector<SpotLight*> spotLights;				// scene spot lights
 	static inline vector<DirectionalLight*> directionalLights;	// scene directional lights
 	static inline SkyDome* sky;									// HDR skydome
-private:
-	static inline int nodeListHoles;	// zero if no instance deletions occurred; adding instances will be faster.
+	static inline BVH tlas;										// top-level acceleration structure
+#ifdef ENABLE_OPENCL_BVH
+	// OpenCL buffers for transferring data from CPU to GPU
+	static inline Buffer* bvhNodeData;							// tlas and blas node data
+	static inline Buffer* triangleData;							// triangle data
+	static inline Buffer* fatTriData;							// full-featured triangle records 
+	static inline Buffer* triangleIdxData;						// triangle index arrays
+	static inline Buffer* offsetData;							// blas offsets
+	static inline Buffer* transformData;						// blas transforms
+	static inline Buffer* skyData;								// skybox pixels
+	static inline Buffer* ldrData, * hdrData;					// texture data (regular and hdr)
+	static inline Buffer* materialData;							// materials 
+	// methods
+	static void InitializeGPUData();
+	static void UpdateGPUData();
+#endif
 };
 
 }

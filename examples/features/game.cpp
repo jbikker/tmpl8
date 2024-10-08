@@ -16,12 +16,12 @@ void Game::Init()
 {
 	// anything that happens only once at application start goes here
 	legocar = scene.AddMesh( "assets/legocar.obj" );
-	scene.UpdateBVH();
 	Mesh* mesh = scene.meshPool[0];
-	BVH& bvh = mesh->bvh;
-	bvhData = new Buffer( bvh.nodesUsed * sizeof( BVH::BVHNode ), bvh.bvhNode );
-	triData = new Buffer( bvh.triCount * sizeof( float4 ) * 3, bvh.tris );
-	idxData = new Buffer( bvh.triCount * sizeof( uint ), bvh.triIdx );
+	mesh->UpdateBVH();
+	BVH* bvh = mesh->bvh;
+	bvhData = new Buffer( bvh->newNodePtr * sizeof( BVH::BVHNode ), bvh->bvhNode );
+	triData = new Buffer( bvh->triCount * sizeof( float4 ) * 3, bvh->tris );
+	idxData = new Buffer( bvh->triCount * sizeof( uint ), bvh->triIdx );
 	bvhData->CopyToDevice();
 	triData->CopyToDevice();
 	idxData->CopyToDevice();
@@ -71,8 +71,8 @@ void Game::Tick( float /* deltaTime */ )
 	Mesh* mesh = scene.meshPool[0];
 	for( int y = 0; y < 256; y++ ) for( int x = 0; x < 256; x++ )
 	{
-		BVH::Ray r( float3( x - 128.0f, 128.0f - y, -500.0f ) * 0.001f, float3( 0, 0, 1 ) );
-		mesh->bvh.Intersect( r );
+		Ray r( float3( x - 128.0f, 128.0f - y, -500.0f ) * 0.001f, float3( 0, 0, 1 ) );
+		mesh->bvh->Intersect( r );
 		screen->Plot( x + 800, y + 100, r.hit.t < 1e30f ? 0xffffff : 0 );
 	}
 

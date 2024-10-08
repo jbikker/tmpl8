@@ -18,7 +18,8 @@
 
 #pragma once
 
-namespace Tmpl8 {
+namespace Tmpl8
+{
 
 #pragma warning ( push )
 #pragma warning ( disable: 4201 /* nameless struct / union */ )
@@ -59,12 +60,14 @@ struct ALIGN( 16 ) int4
 	union { struct { int x, y, z, w; }; int cell[4]; };
 	int& operator [] ( const int n ) { return cell[n]; }
 };
+struct float3;
 struct ALIGN( 16 ) int3
 {
 	int3() = default;
 	int3( const int a, const int b, const int c ) : x( a ), y( b ), z( c ) {}
 	int3( const int a ) : x( a ), y( a ), z( a ) {}
 	int3( const int4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
+	int3( const float3 & a );
 	union { struct { int x, y, z; int dummy; }; int cell[4]; };
 	int& operator [] ( const int n ) { return cell[n]; }
 };
@@ -84,10 +87,10 @@ struct ALIGN( 16 ) uint3
 	uint3( const uint a, const uint b, const uint c ) : x( a ), y( b ), z( c ) {}
 	uint3( const uint a ) : x( a ), y( a ), z( a ) {}
 	uint3( const uint4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
+	uint3( const float3 & a );
 	union { struct { uint x, y, z; uint dummy; }; uint cell[4]; };
 	uint& operator [] ( const int n ) { return cell[n]; }
 };
-struct float3;
 struct ALIGN( 16 ) float4
 {
 	float4() = default;
@@ -112,6 +115,7 @@ struct float3
 	float3( const int4 a ) : x( (float)a.x ), y( (float)a.y ), z( (float)a.z ) {}
 	float2 xy() { return float2( x, y ); }
 	float2 yz() { return float2( y, z ); }
+	float halfArea() { return x < -1e30f ? 0 : (x * y + y * z + z * x); } // for SAH calculations
 	union { struct { float x, y, z; }; float cell[3]; };
 	float& operator [] ( const int n ) { return cell[n]; }
 };
@@ -137,9 +141,8 @@ inline float rsqrtf( const float x ) { return 1.0f / sqrtf( x ); }
 inline constexpr float sqrf( const float x ) { return x * x; }
 inline constexpr int sqr( int x ) { return x * x; }
 inline float3 expf( const float3& a ) { return float3( expf( a.x ), expf( a.y ), expf( a.z ) ); }
-inline float safercp( const float x ) { return x > 1e-10f ? (1.0f / x) : (x < -1e-10f ? (1.0f / x) : 1e30f); }
+inline float safercp( const float x ) { return x > 1e-12f ? (1.0f / x) : (x < -1e-12f ? (1.0f / x) : 1e30f); }
 inline float3 safercp( const float3 a ) { return float3( safercp( a.x ), safercp( a.y ), safercp( a.z ) ); }
-
 inline float2 make_float2( const float a, float b ) { float2 f2; f2.x = a, f2.y = b; return f2; }
 inline float2 make_float2( const float s ) { return make_float2( s, s ); }
 inline float2 make_float2( const float3& a ) { return make_float2( a.x, a.y ); }
@@ -890,27 +893,28 @@ public:
 	}
 	static quat slerp( const quat& a, const quat& b, const float t )
 	{
-		// from https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/index.htm
-		quat qm;
-		float cosHalfTheta = a.w * b.w + a.x * b.x + a.y * b.y + a.z * b.z;
-		if (abs( cosHalfTheta ) >= 1.0)
+		// from GLM, via blog.magnum.graphics/backstage/the-unnecessarily-short-ways-to-do-a-quaternion-slerp
+		quat r = b;
+		float cosTheta = a.w * r.w + a.x * r.x + a.y * r.y + a.z * r.z;
+		if (cosTheta < 0) r = r * -1.0f, cosTheta = -cosTheta;
+		if (cosTheta > 0.99f)
 		{
-			qm.w = a.w, qm.x = a.x, qm.y = a.y, qm.z = a.z;
-			return qm;
+			// Linear interpolation
+			r.w = (1 - t) * a.w + t * r.w;
+			r.x = (1 - t) * a.x + t * r.x;
+			r.y = (1 - t) * a.y + t * r.y;
+			r.z = (1 - t) * a.z + t * r.z;
 		}
-		float halfTheta = acosf( cosHalfTheta );
-		float sinHalfTheta = sqrtf( 1.0f - cosHalfTheta * cosHalfTheta );
-		if (fabs( sinHalfTheta ) < 0.001f)
+		else
 		{
-			qm.w = a.w * 0.5f + b.w * 0.5f, qm.x = a.x * 0.5f + b.x * 0.5f;
-			qm.y = a.y * 0.5f + b.y * 0.5f, qm.z = a.z * 0.5f + b.z * 0.5f;
-			return qm;
+			float angle = acosf( cosTheta );
+			float s1 = sinf( 1 - t ), s2 = sinf( t * angle ), s3 = sinf( angle );
+			r.w = (s1 * a.w + s2 * r.w) / s3;
+			r.x = (s1 * a.x + s2 * r.x) / s3;
+			r.y = (s1 * a.y + s2 * r.y) / s3;
+			r.z = (s1 * a.z + s2 * r.z) / s3;
 		}
-		float ratioA = sinf( (1 - t) * halfTheta ) / sinHalfTheta;
-		float ratioB = sinf( t * halfTheta ) / sinHalfTheta;
-		qm.w = (a.w * ratioA + b.w * ratioB), qm.x = (a.x * ratioA + b.x * ratioB);
-		qm.y = (a.y * ratioA + b.y * ratioB), qm.z = (a.z * ratioA + b.z * ratioB);
-		return qm;
+		return r;
 	}
 	quat operator + ( const quat& q ) const { return quat( w + q.w, x + q.x, y + q.y, z + q.z ); }
 	quat operator - ( const quat& q ) const { return quat( w - q.w, x - q.x, y - q.y, z - q.z ); }
@@ -997,3 +1001,28 @@ float Rand( float range );
 // Perlin noise
 float noise2D( const float x, const float y );
 float noise3D( const float x, const float y, const float z );
+
+// half-floats
+float half_to_float( const half x );
+half float_to_half( const float x );
+
+// bad float detection (method from OpenCV)
+inline bool isnan( const float value )
+{
+	const uint ieee754 = *reinterpret_cast<const uint*>(&value);
+	return (ieee754 & 0x7fffffff) > 0x7f800000;
+}
+inline bool isinf( const float value )
+{
+	const uint ieee754 = *reinterpret_cast<const uint*>(&value);
+	return (ieee754 & 0x7fffffff) == 0x7f800000;
+}
+inline bool badfloat( const float value )
+{
+	const uint ieee754 = *reinterpret_cast<const uint*>(&value);
+	return (ieee754 & 0x7fffffff) >= 0x7f800000;
+}
+inline bool badfloat3( const float3 v )
+{
+	return badfloat( v.x + v.y + v.z );
+}

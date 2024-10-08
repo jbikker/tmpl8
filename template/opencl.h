@@ -165,11 +165,12 @@ public:
 private:
 	void SetArgument( int idx, cl_mem* buffer );
 	void SetArgument( int idx, Buffer* buffer );
-	void SetArgument( int idx, float );
-	void SetArgument( int idx, int );
-	void SetArgument( int idx, float2 );
 	void SetArgument( int idx, float3 );
-	void SetArgument( int idx, float4 );
+	template<class T> void SetArgument( int idx, T value )
+	{
+		CheckCLStarted();
+		clSetKernelArg( kernel, idx, sizeof( T ), &value );
+	}
 	// other methods
 public:
 	static bool InitCL();
@@ -189,7 +190,7 @@ private:
 	inline static bool isNVidia = false, isAMD = false, isIntel = false, isOther = false;
 	inline static bool isAmpere = false, isTuring = false, isPascal = false;
 	inline static int vendorLines = 0;
-	inline static vector<Kernel*> loadedKernels; 
+	inline static vector<Kernel*> loadedKernels;
 public:
 	inline static bool candoInterop = false, clStarted = false;
 };

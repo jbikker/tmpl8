@@ -17,10 +17,10 @@ extern GLFWwindow* window;
 
 void FatalError( const char* fmt, ... )
 {
-	char t[16384];
+	char t[65536];
 	va_list args;
 	va_start( args, fmt );
-	vsnprintf( t, sizeof( t ), fmt, args );
+	vsnprintf( t, sizeof( t ) - 2, fmt, args );
 	va_end( args );
 #ifdef _MSC_VER
 	MessageBox( NULL, t, "Fatal error", MB_OK );
@@ -158,7 +158,7 @@ Buffer::Buffer( unsigned int N, void* ptr, unsigned int t )
 	{
 		size = N;
 		textureID = 0; // not representing a texture
-		deviceBuffer = clCreateBuffer( Kernel::GetContext(), rwFlags, size, 0, 0 );
+		if (N > 0) deviceBuffer = clCreateBuffer( Kernel::GetContext(), rwFlags, size, 0, 0 );
 		hostBuffer = (uint*)ptr;
 	}
 	else
@@ -177,18 +177,22 @@ Buffer::Buffer( unsigned int N, void* ptr, unsigned int t )
 // ----------------------------------------------------------------------------
 Buffer::~Buffer()
 {
-	if (ownData)
+	if (size > 0)
 	{
-		FREE64( hostBuffer );
-		hostBuffer = 0;
+		if (ownData)
+		{
+			FREE64( hostBuffer );
+			hostBuffer = 0;
+		}
+		if ((type & (TEXTURE | TARGET)) == 0) clReleaseMemObject( deviceBuffer );
 	}
-	if ((type & (TEXTURE | TARGET)) == 0) clReleaseMemObject( deviceBuffer );
 }
 
 // GetHostPtr method
 // ----------------------------------------------------------------------------
 unsigned int* Buffer::GetHostPtr()
 {
+	if (size == 0) return 0;
 	if (!hostBuffer)
 	{
 		hostBuffer = (uint*)MALLOC64( size );
@@ -198,10 +202,11 @@ unsigned int* Buffer::GetHostPtr()
 	return hostBuffer;
 }
 
-// CopyToDevice method
+// CopyToDevice methods
 // ----------------------------------------------------------------------------
-void Buffer::CopyToDevice( bool blocking )
+void Buffer::CopyToDevice( const bool blocking )
 {
+	if (size == 0) return;
 	cl_int error;
 	if (!hostBuffer)
 	{
@@ -211,19 +216,33 @@ void Buffer::CopyToDevice( bool blocking )
 	}
 	CHECKCL( error = clEnqueueWriteBuffer( Kernel::GetQueue(), deviceBuffer, blocking, 0, size, hostBuffer, 0, 0, 0 ) );
 }
+void Buffer::CopyToDevice( const int offset, const int byteCount, const bool blocking )
+{
+	if (size == 0) return;
+	cl_int error;
+	if (!hostBuffer)
+	{
+		hostBuffer = (uint*)MALLOC64( size );
+		ownData = true;
+		aligned = true;
+	}
+	CHECKCL( error = clEnqueueWriteBuffer( Kernel::GetQueue(), deviceBuffer, blocking, offset, byteCount, hostBuffer, 0, 0, 0 ) );
+}
 
 // CopyToDevice2 method (uses 2nd queue)
 // ----------------------------------------------------------------------------
-void Buffer::CopyToDevice2( bool blocking, cl_event* eventToSet, const size_t s )
+void Buffer::CopyToDevice2( const bool blocking, cl_event* eventToSet, const size_t s )
 {
+	if (size == 0) return;
 	cl_int error;
 	CHECKCL( error = clEnqueueWriteBuffer( Kernel::GetQueue2(), deviceBuffer, blocking ? CL_TRUE : CL_FALSE, 0, s == 0 ? size : s, hostBuffer, 0, 0, eventToSet ) );
 }
 
 // CopyFromDevice method
 // ----------------------------------------------------------------------------
-void Buffer::CopyFromDevice( bool blocking )
+void Buffer::CopyFromDevice( const bool blocking )
 {
+	if (size == 0) return;
 	cl_int error;
 	if (!hostBuffer)
 	{
@@ -233,18 +252,31 @@ void Buffer::CopyFromDevice( bool blocking )
 	}
 	CHECKCL( error = clEnqueueReadBuffer( Kernel::GetQueue(), deviceBuffer, blocking, 0, size, hostBuffer, 0, 0, 0 ) );
 }
+void Buffer::CopyFromDevice( const int offset, const int byteCount, const bool blocking )
+{
+	if (size == 0) return;
+	cl_int error;
+	if (!hostBuffer)
+	{
+		hostBuffer = (uint*)MALLOC64( size );
+		ownData = true;
+		aligned = true;
+	}
+	CHECKCL( error = clEnqueueReadBuffer( Kernel::GetQueue(), deviceBuffer, blocking, offset, byteCount, hostBuffer, 0, 0, 0 ) );
+}
 
 // CopyTo
 // ----------------------------------------------------------------------------
 void Buffer::CopyTo( Buffer* buffer )
 {
-	clEnqueueCopyBuffer( Kernel::GetQueue(), deviceBuffer, buffer->deviceBuffer, 0, 0, size, 0, 0, 0 );
+	if (size > 0) clEnqueueCopyBuffer( Kernel::GetQueue(), deviceBuffer, buffer->deviceBuffer, 0, 0, size, 0, 0, 0 );
 }
 
 // Clear
 // ----------------------------------------------------------------------------
 void Buffer::Clear()
 {
+	if (size == 0) return;
 	uint value = 0;
 	cl_int error;
 	CHECKCL( error = clEnqueueFillBuffer( Kernel::GetQueue(), deviceBuffer, &value, 4, 0, size, 0, 0, 0 ) );
@@ -255,8 +287,43 @@ void Buffer::Clear()
 Kernel::Kernel( char* file, char* entryPoint )
 {
 	if (!clStarted) InitCL();
+	// see if we have seen this source file before
+	for (int s = (int)loadedKernels.size(), i = 0; i < s; i++)
+	{
+		if (!_stricmp( file, loadedKernels[i]->sourceFile ))
+		{
+			cl_int error;
+			program = loadedKernels[i]->program;
+			kernel = clCreateKernel( program, entryPoint, &error );
+			CHECKCL( error );
+			return;
+		}
+	}
+	// backup working folder
+	char dirBackup[2048];
+	getcwd( dirBackup, 2047 );
+	// change directory
+	char* dir = new char[strlen( file ) + 1], * lastSlash, * fileName = dir;
+	strcpy( dir, file );
+	lastSlash = strstr( dir, "/" );
+	if (!lastSlash) lastSlash = strstr( dir, "\\" );
+	while (lastSlash)
+	{
+		char* nextSlash = strstr( lastSlash + 1, "/" );
+		if (!nextSlash) nextSlash = strstr( lastSlash + 1, "\\" );
+		if (!nextSlash) break;
+		lastSlash = nextSlash;
+	}
+	if (lastSlash)
+	{
+		*lastSlash = 0;
+		fileName = lastSlash + 1;
+		chdir( dir );
+	}
 	// load a cl file
-	string csText = TextFileRead( file );
+	sourceFile = new char[strlen( file ) + 1];
+	strcpy( sourceFile, file );
+	string csText = TextFileRead( fileName );
 	if (csText.size() == 0) FatalError( "File %s not found", file );
 	// add vendor defines
 	vendorLines = 0;
@@ -267,6 +334,44 @@ Kernel::Kernel( char* file, char* entryPoint )
 	if (isAmpere) csText = "#define ISAMPERE\n" + csText, vendorLines++;
 	if (isTuring) csText = "#define ISTURING\n" + csText, vendorLines++;
 	if (isPascal) csText = "#define ISPASCAL\n" + csText, vendorLines++;
+	// expand #include directives: cl compiler doesn't support these natively
+	// warning: this simple system does not handle nested includes.
+	struct Include { int start, end; string file; } includes[64];
+	int Ninc = 0;
+#if 1 // should not be needed, but AMD seems to require it anyway...
+	if (isAMD) while (1)
+	{
+		// see if any #includes remain
+		size_t pos = csText.find( "#include" );
+		if (pos == string::npos) break;
+		// start of expanded source construction
+		string tmp;
+		if (pos > 0)
+			tmp = csText.substr( 0, pos - 1 ) + "\n",
+			includes[Ninc].start = LineCount( tmp ); // record first line of #include content
+		else
+			includes[Ninc].start = 0;
+		// parse filename of include file
+		pos = csText.find( "\"", pos + 1 );
+		if (pos == string::npos) FatalError( "Expected \" after #include in shader." );
+		size_t end = csText.find( "\"", pos + 1 );
+		if (end == string::npos) FatalError( "Expected second \" after #include in shader." );
+		string srcFile = csText.substr( pos + 1, end - pos - 1 );
+		// load include file content
+		string incText = TextFileRead( srcFile.c_str() );
+		includes[Ninc].end = includes[Ninc].start + LineCount( incText );
+		includes[Ninc++].file = srcFile;
+		if (incText.size() == 0) FatalError( "#include file not found:\n%s", srcFile.c_str() );
+		// cleanup include file content: we get some crap first sometimes, but why?
+		int firstValidChar = 0;
+		while (incText[firstValidChar] < 0) firstValidChar++;
+		// add include file content and remainder of source to expanded source string
+		tmp += incText.substr( firstValidChar, string::npos );
+		tmp += csText.substr( end + 1, string::npos ) + "\n";
+		// repeat until no #includes left
+		csText = tmp;
+	}
+#endif
 	// attempt to compile the loaded source text
 	const char* source = csText.c_str();
 	size_t size = strlen( source );
@@ -278,7 +383,9 @@ Kernel::Kernel( char* file, char* entryPoint )
 	// -cl-no-subgroup-ifp ? fails on nvidia.
 #if 1
 	// AMD-compatible compilation, thanks Rosalie de Winther
-	error = clBuildProgram( program, 0, NULL, "-cl-fast-relaxed-math -cl-mad-enable -cl-single-precision-constant", NULL, NULL );
+	char buildString[1024];
+	strcpy( buildString, "-cl-std=CL2.0 -cl-fast-relaxed-math -cl-mad-enable -cl-single-precision-constant -cl-denorms-are-zero" );
+	error = clBuildProgram( program, 0, NULL, buildString, NULL, NULL );
 #else
 	error = clBuildProgram( program, 0, NULL, "-cl-nv-verbose -cl-fast-relaxed-math -cl-mad-enable -cl-single-precision-constant", NULL, NULL );
 #endif
@@ -312,13 +419,73 @@ Kernel::Kernel( char* file, char* entryPoint )
 		FILE* f = fopen( "errorlog.txt", "wb" );
 		fwrite( log, 1, size, f );
 		fclose( f );
+	#if 0
 		// find and display the first errormat; just dump it to a window
 		log[2048] = 0; // truncate very long logs
 		FatalError( log, "Build error" );
+	#else
+		// find and display the first error. Note: platform specific sadly; code below is for NVIDIA
+		char* errorString = strstr( log, ": error:" );
+		if (errorString)
+		{
+			int errorPos = (int)(errorString - log);
+			while (errorPos > 0) if (log[errorPos - 1] == '\n') break; else errorPos--;
+			// translate file and line number of error and report
+			log[errorPos + 2048] = 0;
+			int lineNr = 0, linePos = 0;
+			char* lns = strstr( log + errorPos, ">:" ), * eol;
+			if (!lns) FatalError( log + errorPos ); else
+			{
+				lns += 2;
+				while (*lns >= '0' && *lns <= '9') lineNr = lineNr * 10 + (*lns++ - '0');
+				lns++; // proceed to line number
+				while (*lns >= '0' && *lns <= '9') linePos = linePos * 10 + (*lns++ - '0');
+				lns += 9; // proceed to error message
+				eol = lns;
+				while (*eol != '\n' && *eol > 0) eol++;
+				*eol = 0;
+				lineNr--; // we count from 0 instead of 1
+				// adjust file and linenr based on include file data
+				string errorFile = file;
+				bool errorInInclude = false;
+				for (int i = Ninc - 1; i >= 0; i--)
+				{
+					if (lineNr > includes[i].end)
+					{
+						for (int j = 0; j <= i; j++) lineNr -= includes[j].end - includes[j].start;
+						break;
+					}
+					else if (lineNr > includes[i].start)
+					{
+						errorFile = includes[i].file;
+						lineNr -= includes[i].start;
+						errorInInclude = true;
+						break;
+					}
+				}
+				if (!errorInInclude) lineNr -= vendorLines;
+				// present error message
+				char t[1024];
+				sprintf( t, "file %s, line %i, pos %i:\n%s", errorFile.c_str(), lineNr + 1, linePos, lns );
+				FatalError( t, "Build error" );
+			}
+		}
+		else
+		{
+			// error string has unknown format; just dump it to a window
+			log[2048] = 0; // truncate very long logs
+			FatalError( log, "Build error" );
+		}
+	#endif
 	}
 	kernel = clCreateKernel( program, entryPoint, &error );
 	if (kernel == 0) FatalError( "clCreateKernel failed: entry point not found." );
 	CHECKCL( error );
+	loadedKernels.push_back( this );
+	// restore working directory and cleanup
+	chdir( dirBackup );
+	delete sourceFile;
+	delete dir;
 }
 
 Kernel::Kernel( cl_program& existingProgram, char* entryPoint )
@@ -358,8 +525,6 @@ bool Kernel::InitCL()
 	char device_string[1024], device_platform[1024];
 	for (uint i = 0; i < devCount; i++)
 	{
-		// CHECKCL( error = clGetDeviceInfo( devices[i], CL_DEVICE_NAME, 1024, &device_string, NULL ) );
-		// if (strstr( device_string, "AMD" ) == 0) continue; // I insist on AMD
 		size_t extensionSize;
 		CHECKCL( error = clGetDeviceInfo( devices[i], CL_DEVICE_EXTENSIONS, 0, NULL, &extensionSize ) );
 		if (extensionSize > 0)
@@ -412,6 +577,10 @@ bool Kernel::InitCL()
 	clGetDeviceInfo( devices[deviceUsed], CL_DEVICE_NAME, 1024, &device_string, NULL );
 	clGetDeviceInfo( devices[deviceUsed], CL_DEVICE_VERSION, 1024, &device_platform, NULL );
 	printf( "Device # %u, %s (%s)\n", deviceUsed, device_string, device_platform );
+	// print local memory size
+	size_t localMem;
+	clGetDeviceInfo( devices[deviceUsed], CL_DEVICE_LOCAL_MEM_SIZE, 1024, NULL, &localMem );
+	printf( "Local memory size: %iKB\n", (int)localMem );
 	// digest device string
 	char* d = device_string;
 	for (int i = 0; i < strlen( d ); i++) if (d[i] >= 'A' && d[i] <= 'Z') d[i] -= 'A' - 'a';
@@ -451,7 +620,7 @@ bool Kernel::InitCL()
 			if (strstr( d, "titan x" )) isPascal = true;
 		}
 	}
-	else if (strstr( d, "amd" ) || strstr( d, "ellesmere" )) // JdW
+	else if (strstr( d, "amd" ) || strstr( d, "ellesmere" ) || strstr( d, "gfx1100" ) || strstr( d, "AMD" )) // JdW
 	{
 		isAMD = true;
 	}
@@ -527,12 +696,16 @@ void Kernel::SetArgument( int idx, Buffer* buffer )
 		acqBuffer = buffer;
 	}
 }
-void Kernel::SetArgument( int idx, int value ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( int ), &value ); }
-void Kernel::SetArgument( int idx, float value ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( float ), &value ); }
-void Kernel::SetArgument( int idx, float2 value ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( float2 ), &value ); }
-void Kernel::SetArgument( int idx, float3 value ) { CheckCLStarted(); float4 tmp( value, 0 ); clSetKernelArg( kernel, idx, sizeof( float4 ), &tmp ); }
-void Kernel::SetArgument( int idx, float4 value ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( float4 ), &value ); }
-void Kernel::SetArgument( int idx, cl_mem* buffer ) { CheckCLStarted(); clSetKernelArg( kernel, idx, sizeof( cl_mem ), buffer ); }
+void Kernel::SetArgument( int idx, float3 value )
+{
+	CheckCLStarted(); float4 tmp( value, 0 );
+	clSetKernelArg( kernel, idx, sizeof( float4 ), &tmp );
+}
+void Kernel::SetArgument( int idx, cl_mem* buffer )
+{
+	CheckCLStarted();
+	clSetKernelArg( kernel, idx, sizeof( cl_mem ), buffer );
+}
 
 // Run method
 // ----------------------------------------------------------------------------

@@ -71,28 +71,6 @@ void Surface::Plot( int x, int y, uint c )
 	pixels[x + y * width] = c;
 }
 
-
-void Surface::PlotSubpixel( float x, float y, uint c )
-{
-	if ((x >= 0) && (y >= 0) && (x < (width - 1)) && (y < (height - 1)))
-	{
-		float x_in_pixel = x - (int)x;
-		float y_in_pixel = y - (int)y;
-		float w0 = (1 - x_in_pixel) * (1 - y_in_pixel);
-		float w1 = x_in_pixel * (1 - y_in_pixel);
-		float w2 = (1 - x_in_pixel) * y_in_pixel;
-		float w3 = 1 - (w0 + w1 + w2);
-		uint p0 = ::ScaleColor( c, (int)(w0 * 255.9f) );
-		uint p1 = ::ScaleColor( c, (int)(w1 * 255.9f) );
-		uint p2 = ::ScaleColor( c, (int)(w2 * 255.9f) );
-		uint p3 = ::ScaleColor( c, (int)(w3 * 255.9f) );
-		pixels[(int)x + (int)y * width] = AddBlend( p0, pixels[(int)x + (int)y * width] );
-		pixels[(int)(x + 1) + (int)y * width] = AddBlend( p1, pixels[(int)(x + 1) + (int)y * width] );
-		pixels[(int)x + (int)(y + 1) * width] = AddBlend( p2, pixels[(int)x + (int)(y + 1) * width] );
-		pixels[(int)(x + 1) + (int)(y + 1) * width] = AddBlend( p3, pixels[(int)(x + 1) + (int)(y + 1) * width] );
-	}
-}
-
 void Surface::Box( int x1, int y1, int x2, int y2, uint c )
 {
 	Line( (float)x1, (float)y1, (float)x2, (float)y1, c );

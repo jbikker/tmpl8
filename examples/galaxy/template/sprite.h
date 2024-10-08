@@ -17,7 +17,6 @@ public:
 	// methods
 	void Draw( Surface* target, int x, int y );
 	void DrawScaled( int x, int y, int width, int height, Surface* target );
-	void DrawScaledAdditiveSubpixel( float x, float y, float w, float h, Surface* target );
 	void SetFlags( unsigned int f ) { flags = f; }
 	void SetFrame( unsigned int i ) { currentFrame = i; }
 	unsigned int GetFlags() const { return flags; }

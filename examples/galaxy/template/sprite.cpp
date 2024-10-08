@@ -75,44 +75,6 @@ void Sprite::DrawScaled( int x1, int y1, int w, int h, Surface* target )
 	}
 }
 
-// special draw function for galaxy
-void Sprite::DrawScaledAdditiveSubpixel( float x, float y, float w, float h, Surface* target )
-{
-	// calculate address of source image
-	uint* src = surface->pixels + currentFrame * width;
-	// calculate screen space bounding box of the scaled image
-	int x1 = (int)(x - w / 2), y1 = (int)(y - h / 2);
-	int x2 = (int)(x + 1 + w / 2), y2 = (int)(y + 1 + h / 2);
-	// loop over target box; do a filtered read from source for each pixel
-	for (int i = x1; i < x2; i++) for (int j = y1; j < y2; j++)
-	{
-		// determine floating point (sub-pixel) source coordinates
-		float sx = max( 0.0f, ((float)i - (x - w / 2)) * (width / w) );
-		float sy = max( 0.0f, ((float)j - (y - h / 2)) * (height / h) );
-		// use bilinear interpolation to read from source image
-		float x_in_pixel = sx - (int)sx;
-		float y_in_pixel = sy - (int)sy;
-		float w0 = (1 - x_in_pixel) * (1 - y_in_pixel);
-		float w1 = x_in_pixel * (1 - y_in_pixel);
-		float w2 = (1 - x_in_pixel) * y_in_pixel;
-		float w3 = 1 - (w0 + w1 + w2);
-		int x0 = min( width - 1, max( 0, (int)sx ) );
-		int y0 = min( height - 1, max( 0, (int)sy ) );
-		int x3 = min( width - 1, max( 0, (int)(sx + 1) ) );
-		int y3 = min( height - 1, max( 0, (int)(sy + 1) ) );
-		uint p0 = src[x0 + y0 * width * numFrames];
-		uint p1 = src[x3 + y0 * width * numFrames];
-		uint p2 = src[x0 + y3 * width * numFrames];
-		uint p3 = src[x3 + y3 * width * numFrames];
-		uint scaledp0 = ScaleColor( p0, (int)(w0 * 255.9f) );
-		uint scaledp1 = ScaleColor( p1, (int)(w1 * 255.9f) );
-		uint scaledp2 = ScaleColor( p2, (int)(w2 * 255.9f) );
-		uint scaledp3 = ScaleColor( p3, (int)(w3 * 255.9f) );
-		uint color = scaledp0 + scaledp1 + scaledp2 + scaledp3;
-		target->pixels[i + j * target->width] = AddBlend( target->pixels[i + j * target->width], color );
-	}
-}
-
 // prepare sprite outline data for faster rendering
 void Sprite::InitializeStartData()
 {

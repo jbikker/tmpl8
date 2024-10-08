@@ -61,7 +61,7 @@ void SkyDome::Load( const char* filename, const float3 scale )
 	if (scale.x != 1.f || scale.y != 1.f || scale.z != 1.f)
 		for (int p = 0; p < width * height; ++p) pixels[p] *= scale;
 	// done
-	dirty = true;
+	MarkAsDirty();
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -126,19 +126,19 @@ Mesh::Mesh( const tinygltf::Mesh& gltfMesh, const tinygltf::Model& gltfModel, co
 void Mesh::LoadGeometry( const char* file, const char* dir, const float scale, const bool flatShaded )
 {
 	// process supplied file name
-	mat4 transform = mat4::Scale( scale ); // may include scale, translation, axis exchange
+	mat4 T = mat4::Scale( scale ); // may include scale, translation, axis exchange
 	string combined = string( dir ) + (dir[strlen( dir ) - 1] == '/' ? "" : "/") + string( file );
 	for (int l = (int)combined.size(), i = 0; i < l; i++) if (combined[i] >= 'A' && combined[i] <= 'Z') combined[i] -= 'Z' - 'z';
 	string extension = (combined.find_last_of( "." ) != string::npos) ? combined.substr( combined.find_last_of( "." ) + 1 ) : "";
 	if (extension.compare( "obj" ) != 0) FATALERROR( "unsupported extension in file %s", combined.c_str() );
-	LoadGeometryFromOBJ( combined.c_str(), dir, transform, flatShaded );
+	LoadGeometryFromOBJ( combined.c_str(), dir, T, flatShaded );
 }
 
 //  +-----------------------------------------------------------------------------+
 //  |  Mesh::LoadGeometryFromObj                                                  |
 //  |  Load an obj file using tinyobj.                                      LH2'24|
 //  +-----------------------------------------------------------------------------+
-void Mesh::LoadGeometryFromOBJ( const string& fileName, const char* directory, const mat4& transform, const bool flatShaded )
+void Mesh::LoadGeometryFromOBJ( const string& fileName, const char* directory, const mat4& T, const bool flatShaded )
 {
 	// load obj file
 	tinyobj::attrib_t attrib;
@@ -222,9 +222,9 @@ void Mesh::LoadGeometryFromOBJ( const string& fileName, const char* directory, c
 		const float3 v0 = make_float3( attrib.vertices[idx0 * 3 + 0], attrib.vertices[idx0 * 3 + 1], attrib.vertices[idx0 * 3 + 2] );
 		const float3 v1 = make_float3( attrib.vertices[idx1 * 3 + 0], attrib.vertices[idx1 * 3 + 1], attrib.vertices[idx1 * 3 + 2] );
 		const float3 v2 = make_float3( attrib.vertices[idx2 * 3 + 0], attrib.vertices[idx2 * 3 + 1], attrib.vertices[idx2 * 3 + 2] );
-		const float4 tv0 = make_float4( v0, 1 ) * transform;
-		const float4 tv1 = make_float4( v1, 1 ) * transform;
-		const float4 tv2 = make_float4( v2, 1 ) * transform;
+		const float4 tv0 = make_float4( v0, 1 ) * T;
+		const float4 tv1 = make_float4( v1, 1 ) * T;
+		const float4 tv2 = make_float4( v2, 1 ) * T;
 		vertices.push_back( tv0 );
 		vertices.push_back( tv1 );
 		vertices.push_back( tv2 );
@@ -285,14 +285,17 @@ void Mesh::LoadGeometryFromOBJ( const string& fileName, const char* directory, c
 			else
 				tri.alpha = make_float3( 0 );
 			// calculate triangle LOD data
-			Material* mat = Scene::materials[tri.material];
-			int textureID = mat->color.textureID;
-			if (textureID > -1)
+			if (tri.material < Scene::materials.size())
 			{
-				Texture* texture = Scene::textures[textureID];
-				float Ta = (float)(texture->width * texture->height) * fabs( (tri.u1 - tri.u0) * (tri.v2 - tri.v0) - (tri.u2 - tri.u0) * (tri.v1 - tri.v0) );
-				float Pa = length( cross( tri.vertex1 - tri.vertex0, tri.vertex2 - tri.vertex0 ) );
-				tri.LOD = 0.5f * log2f( Ta / Pa );
+				Material* mat = Scene::materials[tri.material];
+				int textureID = mat->color.textureID;
+				if (textureID > -1)
+				{
+					Texture* texture = Scene::textures[textureID];
+					float Ta = (float)(texture->width * texture->height) * fabs( (tri.u1 - tri.u0) * (tri.v2 - tri.v0) - (tri.u2 - tri.u0) * (tri.v1 - tri.v0) );
+					float Pa = length( cross( tri.vertex1 - tri.vertex0, tri.vertex2 - tri.vertex0 ) );
+					tri.LOD = 0.5f * log2f( Ta / Pa );
+				}
 			}
 		}
 	}
@@ -383,11 +386,11 @@ void Mesh::ConvertFromGTLFMesh( const tinygltf::Mesh& gltfMesh, const tinygltf::
 			}
 			else if (attribute.first == "TANGENT")
 			{
-				if (attribAccessor.type == TINYGLTF_TYPE_VEC4)
+				/* if (attribAccessor.type == TINYGLTF_TYPE_VEC4)
 					if (attribAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
 						for (size_t i = 0; i < count; i++, a += byte_stride) tmpTs.push_back( *((float4*)a) );
 					else FATALERROR( "double precision tangents not supported in gltf file" );
-				else FATALERROR( "expected vec4 uvs in gltf file" );
+				else FATALERROR( "expected vec4 uvs in gltf file" ); */ // TODO: Causing crashes atm...
 			}
 			else if (attribute.first == "TEXCOORD_0")
 			{
@@ -604,9 +607,9 @@ void Mesh::BuildFromIndexedData( const vector<int>& tmpIndices, const vector<flo
 		// handle second and third set of uv coordinates, if available
 		if (tmpUv2s.size() > 0)
 		{
-			tri.u1_0 = tmpUv2s[v0idx].x, tri.v1_0 = tmpUv2s[v0idx].y;
-			tri.u1_1 = tmpUv2s[v1idx].x, tri.v1_1 = tmpUv2s[v1idx].y;
-			tri.u1_2 = tmpUv2s[v2idx].x, tri.v1_2 = tmpUv2s[v2idx].y;
+			tri.u0_2 = tmpUv2s[v0idx].x, tri.v0_2 = tmpUv2s[v0idx].y;
+			tri.u1_2 = tmpUv2s[v1idx].x, tri.v1_2 = tmpUv2s[v1idx].y;
+			tri.u2_2 = tmpUv2s[v2idx].x, tri.v2_2 = tmpUv2s[v2idx].y;
 		}
 		// process joints / weights
 		if (tmpJoints.size() > 0)
@@ -768,6 +771,57 @@ static FatTri TransformedFatTri( FatTri* tri, mat4 T )
 }
 
 //  +-----------------------------------------------------------------------------+
+//  |  Mesh::UpdateBVH()                                                          |
+//  |  Create or update the mesh BVH.                                       LH2'24|
+//  +-----------------------------------------------------------------------------+
+void Mesh::UpdateBVH()
+{
+	if (!bvh)
+	{
+		bvh = new BVH();
+		bvh->Build( this );
+	}
+	else
+	{
+		// bvh->Refit(); // that will have to do for now.
+	}
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Mesh::Intersect()                                                          |
+//  |  Intersect the (transformed) mesh BVH with a ray.                     LH2'24|
+//  +-----------------------------------------------------------------------------+
+int Mesh::Intersect( Ray& ray )
+{
+	// backup ray and transform original
+	Ray backupRay = ray;
+	ray.O = TransformPosition( ray.O, invTransform );
+	ray.D = TransformVector( ray.D, invTransform );
+	ray.rD = float3( safercp( ray.D.x ), safercp( ray.D.y ), safercp( ray.D.z ) );
+	// trace ray through BVH
+	uint steps = bvh->Intersect( ray );
+	// restore ray origin and direction
+	backupRay.hit = ray.hit;
+	ray = backupRay;
+	return steps;
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Mesh::UpdateWorldBounds()                                                  |
+//  |  Update world-space bounds over the transformed AABB.                 LH2'24|
+//  +-----------------------------------------------------------------------------+
+void Mesh::UpdateWorldBounds()
+{
+	worldBounds.Reset();
+	float3 bmin = bvh->bvhNode[0].aabbMin, bmax = bvh->bvhNode[0].aabbMax;
+	for (int i = 0; i < 8; i++)
+	{
+		float3 corner( i & 1 ? bmax.x : bmin.x, i & 2 ? bmax.y : bmin.y, i & 4 ? bmax.z : bmin.z );
+		worldBounds.Grow( TransformPosition( corner, transform ) );
+	}
+}
+
+//  +-----------------------------------------------------------------------------+
 //  |  Node::Node                                                                 |
 //  |  Constructors.                                                        LH2'24|
 //  +-----------------------------------------------------------------------------+
@@ -879,13 +933,9 @@ void Node::UpdateTransformFromTRS()
 //  |  child nodes. If a change is detected, the light triangles are updated      |
 //  |  as well.                                                             LH2'24|
 //  +-----------------------------------------------------------------------------+
-bool Node::Update( mat4& T, vector<int>& instances, int& posInInstanceArray )
+void Node::Update( const mat4& T )
 {
-	// update the combined transform for this node
-	bool thisWasModified = Changed();
-	bool instancesChanged = thisWasModified;
-	treeChanged = thisWasModified;
-	if (transformed)
+	if (transformed /* true if node was affected by animation channel */)
 	{
 		UpdateTransformFromTRS();
 		transformed = false;
@@ -895,43 +945,36 @@ bool Node::Update( mat4& T, vector<int>& instances, int& posInInstanceArray )
 	for (int s = (int)childIdx.size(), i = 0; i < s; i++)
 	{
 		Node* child = Scene::nodePool[childIdx[i]];
-		bool childChanged = child->Update( combinedTransform, instances, posInInstanceArray );
-		instancesChanged |= childChanged;
-		treeChanged |= childChanged;
+		child->Update( combinedTransform );
 	}
 	// update animations
 	if (meshID > -1)
 	{
-		if (morphed)
+		Mesh* mesh = Scene::meshPool[meshID];
+		mesh->transform = combinedTransform;
+		mesh->invTransform = combinedTransform.Inverted();
+		if (morphed /* true if bone weights were affected by animation channel */)
 		{
-			Scene::meshPool[meshID]->SetPose( weights );
+			mesh->SetPose( weights );
 			morphed = false;
-		}
-		if (thisWasModified && hasLights) UpdateLights();
-		if (instanceID != posInInstanceArray)
-		{
-			instancesChanged = true;
-			if (posInInstanceArray < instances.size())
-				instances[posInInstanceArray] = ID;
-			else
-				instances.push_back( ID );
 		}
 		if (skinID > -1)
 		{
 			Skin* skin = Scene::skins[skinID];
-			mat4 meshTransform = combinedTransform;
-			mat4 meshTransformInverted = meshTransform.Inverted();
 			for (int s = (int)skin->joints.size(), j = 0; j < s; j++)
 			{
 				Node* jointNode = Scene::nodePool[skin->joints[j]];
-				skin->jointMat[j] = meshTransformInverted * jointNode->combinedTransform * skin->inverseBindMatrices[j];
+				skin->jointMat[j] = mesh->invTransform * jointNode->combinedTransform * skin->inverseBindMatrices[j];
 			}
-			Scene::meshPool[meshID]->SetPose( skin );
+			mesh->SetPose( skin ); // TODO: I hope this doesn't overwrite SetPose(weights) ?
 		}
-		posInInstanceArray++;
+		if (mesh->Changed())
+		{
+			// build or refit BVH
+			mesh->UpdateBVH();
+			mesh->UpdateWorldBounds();
+		}
 	}
-	// all done.
-	return instancesChanged;
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -946,7 +989,9 @@ void Node::PrepareLights()
 		for (int s = (int)mesh->triangles.size(), i = 0; i < s; i++)
 		{
 			FatTri* tri = &mesh->triangles[i];
-			Material* mat = Scene::materials[tri->material];
+			uint matIdx = tri->material;
+			if (matIdx >= Scene::materials.size()) continue;
+			Material* mat = Scene::materials[matIdx];
 			if (mat->IsEmissive())
 			{
 				tri->UpdateArea();
@@ -994,7 +1039,7 @@ void Node::UpdateLights()
 
 //  +-----------------------------------------------------------------------------+
 //  |  Material::ConvertFrom                                                      |
-//  |  Converts a tinyobjloader material to a Material.                     LH2'24|
+//  |  Converts a tinyobjloader material to an LH2 Material.                LH2'24|
 //  +-----------------------------------------------------------------------------+
 void Material::ConvertFrom( const tinyobj::material_t& original )
 {
@@ -1036,7 +1081,7 @@ void Material::ConvertFrom( const tinyobj::material_t& original )
 
 //  +-----------------------------------------------------------------------------+
 //  |  Material::ConvertFrom                                                      |
-//  |  Converts a tinygltf material to a Material.                          LH2'24|
+//  |  Converts a tinygltf material to an LH2 Material.                     LH2'24|
 //  +-----------------------------------------------------------------------------+
 void Material::ConvertFrom( const tinygltf::Material& original, const vector<int>& texIdx )
 {
@@ -1112,49 +1157,59 @@ void Material::ConvertFrom( const tinygltf::Material& original, const vector<int
 		else if (value.first == "alphaMode") { /* TODO (used in drone) */ }
 		else { /* capture unexpected values */ }
 	}
-	// process extensions
-	// NOTE: LH2 currently does not properly support PBR materials. Below code is merely
-	// here to ease a future proper implementation.
-	for (const auto& extension : original.extensions)
-	{
-		if (extension.first == "KHR_materials_pbrSpecularGlossiness")
-		{
-			tinygltf::Value value = extension.second;
-			if (value.IsObject())
-			{
-				for (const auto& key : value.Keys())
-				{
-					if (key == "diffuseFactor")
-					{
-						tinygltf::Value v = value.Get( key );
-						// TODO
-					}
-					if (key == "diffuseTexture")
-					{
-						tinygltf::Value v = value.Get( key );
-						color.textureID = texIdx[v.GetNumberAsInt()];
+}
 
-					}
-					if (key == "glossinessFactor")
-					{
-						tinygltf::Value v = value.Get( key );
-						float glossyness = (float)v.GetNumberAsDouble();
-						roughness = 1 - glossyness;
-					}
-					if (key == "specularFactor")
-					{
-						tinygltf::Value v = value.Get( key );
-						// TODO
-					}
-					if (key == "specularGlossinessTexture")
-					{
-						tinygltf::Value v = value.Get( key );
-						// TODO
-					}
-				}
-			}
-		}
-	}
+//  +-----------------------------------------------------------------------------+
+//  |  RenderMaterial::RenderMaterial                                             |
+//  |  Constructor.                                                         LH2'24|
+//  +-----------------------------------------------------------------------------+
+RenderMaterial::RenderMaterial( const Material* source, const vector<int>& offsets )
+{
+#define TOCHAR(a) ((uint)((a)*255.0f))
+#define TOUINT4(a,b,c,d) (TOCHAR(a)+(TOCHAR(b)<<8)+(TOCHAR(c)<<16)+(TOCHAR(d)<<24))
+	memset( this, 0, sizeof( RenderMaterial ) );
+	SetDiffuse( source->color.value );
+	SetTransmittance( float3( 1 ) - source->absorption.value );
+	parameters.x = TOUINT4( source->metallic.value, source->subsurface.value, source->specular.value, source->roughness.value );
+	parameters.y = TOUINT4( source->specularTint.value, source->anisotropic.value, source->sheen.value, source->sheenTint.value );
+	parameters.z = TOUINT4( source->clearcoat.value, source->clearcoatGloss.value, source->transmission.value, 0 );
+	parameters.w = *((uint*)&source->eta);
+	if (source->color.textureID != -1) tex0 = MakeMap( source->color, offsets );
+	if (source->detailColor.textureID != -1) tex1 = MakeMap( source->detailColor, offsets );
+	if (source->normals.textureID != -1) nmap0 = MakeMap( source->normals, offsets );
+	if (source->detailNormals.textureID != -1) nmap1 = MakeMap( source->detailNormals, offsets );
+	// if (source->roughness.textureID != -1) rmap = MakeMap( source->roughness, offsets ); // TODO
+	// if (source->specular.textureID != -1) smap = MakeMap( source->specular, offsets ); // TODO
+	bool hdr = false;
+	if (source->color.textureID != -1) if (Scene::textures[source->color.textureID]->flags & Texture::HDR) hdr = true;
+	flags = (source->eta.value < 1 ? ISDIELECTRIC : 0) +
+		(source->color.textureID != -1 ? HASDIFFUSEMAP : 0) + (hdr ? DIFFUSEMAPISHDR : 0) +
+		(source->normals.textureID != -1 ? HASNORMALMAP : 0) +
+		(source->specular.textureID != -1 ? HASSPECULARITYMAP : 0) +
+		(source->roughness.textureID != -1 ? HASROUGHNESSMAP : 0) +
+		(source->detailNormals.textureID != -1 ? HAS2NDNORMALMAP : 0) +
+		(source->detailColor.textureID != -1 ? HAS2NDDIFFUSEMAP : 0) +
+		((source->flags & 1) ? HASSMOOTHNORMALS : 0) + ((source->flags & 2) ? HASALPHA : 0);
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  RenderMaterial::MakeMap                                                    |
+//  |  Helper function: Converts a spatially varying (i.e., texture-mapped)       |
+//  |  float3 material property into a 'Map', which is a compact representation   |
+//  |  for rendering.                                                       LH2'24|
+//  +-----------------------------------------------------------------------------+
+RenderMaterial::Map RenderMaterial::MakeMap( Material::Float3Value source, const vector<int>& offsets )
+{
+	Map map;
+	Texture* texture = Scene::textures[source.textureID];
+	map.width = (ushort)texture->width;
+	map.height = (ushort)texture->width;
+	map.uscale = float_to_half( source.uvscale.x );
+	map.vscale = float_to_half( source.uvscale.y );
+	map.uoffs = float_to_half( source.uvoffset.x );
+	map.voffs = float_to_half( source.uvoffset.y );
+	map.addr = offsets[source.textureID];
+	return map;
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -1225,7 +1280,11 @@ void Animation::Sampler::ConvertFromGLTFSampler( const tinygltf::AnimationSample
 		case TINYGLTF_COMPONENT_TYPE_SHORT: for (int k = 0; k < N; k++, b += 2) fdata.push_back( max( *((char*)b) / 32767.0f, -1.0f ) ); break;
 		case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: for (int k = 0; k < N; k++, b += 2) fdata.push_back( *((char*)b) / 65535.0f ); break;
 		}
-		for (int i = 0; i < outputAccessor.count; i++) vec4Key.push_back( quat( fdata[i * 4 + 3], fdata[i * 4], fdata[i * 4 + 1], fdata[i * 4 + 2] ) );
+		for (int i = 0; i < outputAccessor.count; i++)
+		{
+			for (int j = 0; j < 4; j++) if (fpclassify( fdata[i * 4 + j] ) == FP_SUBNORMAL) fdata[i * 4 + j] = 0;
+			vec4Key.push_back( quat( fdata[i * 4 + 3], fdata[i * 4], fdata[i * 4 + 1], fdata[i * 4 + 2] ) );
+		}
 	}
 	else assert( false );
 }
@@ -1242,16 +1301,16 @@ float Animation::Sampler::SampleFloat( float currentTime, int k, int i, int coun
 	const float t0 = t[k], t1 = t[k + 1];
 	const float f = (currentTime - t0) / (t1 - t0);
 	// sample
-	if (f <= 0) return floatKey[0]; switch (interpolation)
+	if (f <= 0) return floatKey[0]; else switch (interpolation)
 	{
 	case SPLINE:
 	{
-		const float t_ = f, t2 = t_ * t_, t3 = t2 * t_;
+		const float tt = f, t2 = tt * tt, t3 = t2 * tt;
 		const float p0 = floatKey[(k * count + i) * 3 + 1];
-		const float m0 = (t_ - t0) * floatKey[(k * count + i) * 3 + 2];
+		const float m0 = (t1 - t0) * floatKey[(k * count + i) * 3 + 2];
 		const float p1 = floatKey[((k + 1) * count + i) * 3 + 1];
-		const float m1 = (t_ - t0) * floatKey[((k + 1) * count + i) * 3];
-		return m0 * (t3 - 2 * t2 + t_) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
+		const float m1 = (t1 - t0) * floatKey[((k + 1) * count + i) * 3];
+		return m0 * (t3 - 2 * t2 + tt) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
 	}
 	case Sampler::STEP:
 		return floatKey[k];
@@ -1267,16 +1326,16 @@ float3 Animation::Sampler::SampleVec3( float currentTime, int k ) const
 	const float t0 = t[k], t1 = t[k + 1];
 	const float f = (currentTime - t0) / (t1 - t0);
 	// sample
-	if (f <= 0) return vec3Key[0]; switch (interpolation)
+	if (f <= 0) return vec3Key[0]; else switch (interpolation)
 	{
 	case SPLINE:
 	{
-		const float t_ = f, t2 = t_ * t_, t3 = t2 * t_;
+		const float tt = f, t2 = tt * tt, t3 = t2 * tt;
 		const float3 p0 = vec3Key[k * 3 + 1];
 		const float3 m0 = (t1 - t0) * vec3Key[k * 3 + 2];
 		const float3 p1 = vec3Key[(k + 1) * 3 + 1];
 		const float3 m1 = (t1 - t0) * vec3Key[(k + 1) * 3];
-		return m0 * (t3 - 2 * t2 + t_) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
+		return m0 * (t3 - 2 * t2 + tt) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
 	}
 	case Sampler::STEP: return vec3Key[k];
 	default: return (1 - f) * vec3Key[k] + f * vec3Key[k + 1];
@@ -1296,12 +1355,12 @@ quat Animation::Sampler::SampleQuat( float currentTime, int k ) const
 	#if 1
 	case SPLINE:
 	{
-		const float t_ = f, t2 = t_ * t_, t3 = t2 * t_;
+		const float tt = f, t2 = tt * tt, t3 = t2 * tt;
 		const quat p0 = vec4Key[k * 3 + 1];
 		const quat m0 = vec4Key[k * 3 + 2] * (t1 - t0);
 		const quat p1 = vec4Key[(k + 1) * 3 + 1];
 		const quat m1 = vec4Key[(k + 1) * 3] * (t1 - t0);
-		key = m0 * (t3 - 2 * t2 + t_) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
+		key = m0 * (t3 - 2 * t2 + tt) + p0 * (2 * t3 - 3 * t2 + 1) + p1 * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
 		key.normalize();
 		break;
 	}
@@ -1314,7 +1373,6 @@ quat Animation::Sampler::SampleQuat( float currentTime, int k ) const
 		key.normalize();
 		break;
 	};
-	key.normalize();
 	return key;
 }
 
@@ -1349,8 +1407,8 @@ void Animation::Channel::Update( const float dt, const Sampler* sampler )
 {
 	// advance animation timer
 	t += dt;
-	int keyCount = (int)sampler->t.size();
-	float animDuration = sampler->t[keyCount - 1];
+	const int keyCount = (int)sampler->t.size();
+	const float animDuration = sampler->t[keyCount - 1];
 	if (animDuration == 0 /* book scene */ || keyCount == 1 /* bird */)
 	{
 		if (target == 0) // translation
@@ -1380,26 +1438,19 @@ void Animation::Channel::Update( const float dt, const Sampler* sampler )
 	{
 		while (t >= animDuration) t -= animDuration, k = 0;
 		while (t >= sampler->t[(k + 1) % keyCount]) k++;
-		// determine interpolation parameters
-		assert( k < keyCount - 1 );
-		assert( t >= 0 && t < animDuration );
-		assert( t < sampler->t[k + 1] );
 		// apply anination key
 		if (target == 0) // translation
 		{
-			assert( sampler->t.size() == sampler->vec3Key.size() );
 			Scene::nodePool[nodeIdx]->translation = sampler->SampleVec3( t, k );
 			Scene::nodePool[nodeIdx]->transformed = true;
 		}
 		else if (target == 1) // rotation
 		{
-			assert( sampler->t.size() == sampler->vec4Key.size() );
 			Scene::nodePool[nodeIdx]->rotation = sampler->SampleQuat( t, k );
 			Scene::nodePool[nodeIdx]->transformed = true;
 		}
 		else if (target == 2) // scale
 		{
-			assert( sampler->t.size() == sampler->vec3Key.size() );
 			Scene::nodePool[nodeIdx]->scale = sampler->SampleVec3( t, k );
 			Scene::nodePool[nodeIdx]->transformed = true;
 		}
@@ -1430,6 +1481,15 @@ void Animation::ConvertFromGLTFAnim( tinygltf::Animation& gltfAnim, tinygltf::Mo
 {
 	for (int i = 0; i < gltfAnim.samplers.size(); i++) sampler.push_back( new Sampler( gltfAnim.samplers[i], gltfModel ) );
 	for (int i = 0; i < gltfAnim.channels.size(); i++) channel.push_back( new Channel( gltfAnim.channels[i], nodeBase ) );
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Animation::SetTime                                                         |
+//  |  Set the animation timers of all channels to a specific value.        LH2'24|
+//  +-----------------------------------------------------------------------------+
+void Animation::SetTime( const float t )
+{
+	for (int i = 0; i < channel.size(); i++) channel[i]->SetTime( t );
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -1594,8 +1654,8 @@ void Texture::Load( const char* fileName, const uint modFlags, bool normalMap )
 		Surface* tmp = new Surface( fileName );
 		idata = (uchar4*)MALLOC64( sizeof( uchar4 ) * PixelsNeeded( tmp->width, tmp->height, MIPLEVELCOUNT ) );
 		memcpy( idata, tmp->pixels, tmp->width * tmp->height * 4 );
+		flags |= LDR, width = tmp->width, height = tmp->height;
 		delete tmp;
-		flags |= LDR;
 		// perform sRGB -> linear conversion if requested
 		if (mods & LINEARIZED) sRGBtoLinear( (uchar*)idata, width * height, 4 );
 		// produce the MIP maps
@@ -1801,7 +1861,17 @@ int Scene::AddScene( const char* sceneFile, const char* dir, const mat4& transfo
 	{
 		string extension4 = cleanFileName.substr( cleanFileName.size() - 5, 5 );
 		string extension3 = cleanFileName.substr( cleanFileName.size() - 4, 4 );
-		if (extension4.compare( ".gltf" ) == 0)
+		if (extension3.compare( ".obj" ) == 0)
+		{
+			// ugly to have this here, but it sure does make it easier to make a scene
+			// out of a single .obj file...
+			float3 scale3( transform.cell[0], transform.cell[5], transform.cell[10] );
+			float scale = (scale3.x == scale3.y && scale3.y == scale3.z) ? scale3.x : 1.0f;
+			uint meshId = AddMesh( sceneFile, dir, scale );
+			AddInstance( AddNode( new Node( meshId, transform * mat4::Scale( 1.0f / scale ) ) ) );
+			return retVal;
+		}
+		else if (extension4.compare( ".gltf" ) == 0)
 			ret = loader.LoadASCIIFromFile( &gltfModel, &err, &warn, cleanFileName.c_str() );
 		else if (extension3.compare( ".bin" ) == 0 || extension3.compare( ".glb" ) == 0)
 			ret = loader.LoadBinaryFromFile( &gltfModel, &err, &warn, cleanFileName.c_str() );
@@ -1968,39 +2038,42 @@ int Scene::AddQuad( float3 N, const float3 pos, const float width, const float h
 //  |  Scene::AddInstance                                                         |
 //  |  Add an instance of an existing mesh to the scene.                    LH2'24|
 //  +-----------------------------------------------------------------------------+
-int Scene::AddInstance( Node* newNode )
+int Scene::AddInstance( const int nodeId )
 {
-	if (nodeListHoles > 0)
-	{
-		// we have holes in the nodes vector due to instance deletions; search from the
-		// end of the list to speed up frequent additions / deletions in complex scenes.
-		for (int i = (int)nodePool.size() - 1; i >= 0; i--) if (nodePool[i] == 0)
-		{
-			// overwrite an empty slot, created by deleting an instance
-			nodePool[i] = newNode;
-			newNode->ID = i;
-			rootNodes.push_back( i );
-			nodeListHoles--; // plugged one hole.
-			return i;
-		}
-	}
-	// no empty slots available or found; make sure we don't look for them again.
-	nodeListHoles = 0;
-	// insert the new node at the end of the list
+	const uint instId = (uint)rootNodes.size();
+	rootNodes.push_back( nodeId );
+	return instId;
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Scene::AddNode                                                             |
+//  |  Add a node to the scene.                                             LH2'24|
+//  +-----------------------------------------------------------------------------+
+int Scene::AddNode( Node* newNode )
+{
 	newNode->ID = (int)nodePool.size();
 	nodePool.push_back( newNode );
-	rootNodes.push_back( newNode->ID );
 	return newNode->ID;
 }
 
 //  +-----------------------------------------------------------------------------+
-//  |  Scene::AddInstance                                                         |
-//  |  Add an instance of an existing mesh to the scene.                    LH2'24|
+//  |  Scene::AddChildNode                                                        |
+//  |  Add a child to a node.                                               LH2'24|
 //  +-----------------------------------------------------------------------------+
-int Scene::AddInstance( const int meshId, const mat4& transform )
+int Scene::AddChildNode( const int parentNodeId, const int childNodeId )
 {
-	Node* newNode = new Node( meshId, transform );
-	return AddInstance( newNode );
+	const int childIdx = (int)nodePool[parentNodeId]->childIdx.size();
+	nodePool[parentNodeId]->childIdx.push_back( childNodeId );
+	return childIdx;
+}
+
+//  +-----------------------------------------------------------------------------+
+//  |  Scene::GetChildId                                                          |
+//  |  Get the node index of a child of a node.                             LH2'24|
+//  +-----------------------------------------------------------------------------+
+int Scene::GetChildId( const int parentId, const int childIdx )
+{
+	return nodePool[parentId]->childIdx[childIdx];
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -2024,7 +2097,6 @@ void Scene::RemoveNode( const int nodeId )
 	Node* node = nodePool[nodeId];
 	nodePool[nodeId] = 0; // safe; we only access the nodes vector indirectly.
 	delete node;
-	nodeListHoles++; // Scene::AddInstance will fill up holes first.
 }
 
 //  +-----------------------------------------------------------------------------+
@@ -2190,16 +2262,6 @@ void Scene::UpdateAnimation( const int animId, const float dt )
 }
 
 //  +-----------------------------------------------------------------------------+
-//  |  Scene::UpdateBVH                                                           |
-//  |  Update the BVH for each mesh in the scnene.                                |
-//  |  TODO: Update TLAS for the scene.                                     LH2'24|
-//  +-----------------------------------------------------------------------------+
-void Scene::UpdateBVH()
-{
-	for (auto mesh : meshPool) mesh->UpdateBVH();
-}
-
-//  +-----------------------------------------------------------------------------+
 //  |  Scene::CreateTexture                                                       |
 //  |  Return a texture. Create it anew, even if a texture with the same origin   |
 //  |  already exists.                                                      LH2'24|
@@ -2284,53 +2346,210 @@ int Scene::AddDirectionalLight( const float3 direction, const float3 radiance )
 }
 
 //  +-----------------------------------------------------------------------------+
-//  |  BVH::Build                                                                 |
-//  |  Construct the Bounding Volume Hierarchy.                             LH2'24|
+//  |  Scene::UpdateSceneGraph (formerly in RenderSystem)                         |
+//  |  Walk the scene graph, updating all node matrices.                    LH2'24|
 //  +-----------------------------------------------------------------------------+
-void BVH::Build( Mesh* mesh )
+void Scene::UpdateSceneGraph( const float deltaTime )
 {
-	// reset node pool
-	nodesUsed = 2;
-	triCount = (uint)mesh->vertices.size() / 3;
-	if (!bvhNode)
+	// play animations
+	for (int s = AnimationCount(), i = 0; i < s; i++)
+		UpdateAnimation( i, deltaTime );
+	// update poses, concatenate matrices, rebuild BVHs
+	for (int nodeIdx : rootNodes)
 	{
-		bvhNode = (BVHNode*)MALLOC64( triCount * 2 * sizeof( BVHNode ) );
-		triIdx = new uint[triCount];
-		centroid = new float4[triCount];
-		tris = mesh->vertices.data();
+		Node* node = nodePool[nodeIdx];
+		mat4 T;
+		node->Update( T /* start with an identity matrix */ );
 	}
-	else assert( tris == mesh->vertices.data() ); // don't change polygon count between builds
-	// populate triangle index array
-	for (uint i = 0; i < triCount; i++) triIdx[i] = i;
-	// calculate triangle centroids for partitioning
-	for (uint i = 0; i < triCount; i++)
-		centroid[i] = (tris[i * 3] + tris[i * 3 + 1] + tris[i * 3 + 2]) * 0.333333f;
-	// assign all triangles to root node
-	BVHNode& root = bvhNode[0];
-	root.leftFirst = 0, root.triCount = triCount;
-	float3 centroidMin, centroidMax;
-	UpdateNodeBounds( 0, centroidMin, centroidMax );
-	// subdivide recursively
-	Subdivide( 0, 0, nodesUsed, centroidMin, centroidMax );
+	// construct TLAS
+	static Mesh m( 512 /* this will be our max BLAS count for now */ );
+	const uint blasCount = (uint)meshPool.size();
+	for (uint i = 0; i < blasCount; i++)
+	{
+		m.vertices[i * 3 + 0] = meshPool[i]->worldBounds.bmin3;
+		m.vertices[i * 3 + 1] = m.vertices[i * 3 + 2] = meshPool[i]->worldBounds.bmax3;
+	}
+	tlas.Build( &m, blasCount );
+}
+
+#ifdef ENABLE_OPENCL_BVH
+
+//  +-----------------------------------------------------------------------------+
+//  |  Scene::InitializeGPUData                                                   |
+//  |  Gather accstruc, material and texture data and store it in OpenCL buffers. |
+//  |  Note: The scene layout is assumed to be finalized at this point; adding    |
+//  |  meshes or changing mesh polygon counts will require more work.       LH2'24|
+//  +-----------------------------------------------------------------------------+
+void Scene::InitializeGPUData()
+{
+	// force bvh build so we have data to copy to GPU
+	UpdateSceneGraph( 0 );
+	// figure out how many BVH nodes and indices we have in total
+	int nodeCount = 0, primCount = 0, idxCount = 0;
+	for (int s = (int)meshPool.size(), i = 0; i < s; i++)
+		nodeCount += meshPool[i]->bvh->newNodePtr,
+		primCount += (int)meshPool[i]->vertices.size() / 3,
+		idxCount += meshPool[i]->bvh->idxCount;
+	nodeCount += tlas.newNodePtr;
+	primCount += (int)meshPool.size();
+	idxCount += (int)meshPool.size();
+	// count textures and texture pixels
+	uint ldrTexCount = 0, ldrPixelCount = 0;
+	uint hdrTexCount = 0, hdrPixelCount = 0;
+	for (int s = (int)textures.size(), i = 0; i < s; i++)
+	{
+		if (textures[i]->flags & Texture::HDR)
+		{
+			hdrTexCount++;
+			hdrPixelCount += textures[i]->width * textures[i]->height;
+		}
+		else
+		{
+			ldrTexCount++;
+			ldrPixelCount += textures[i]->width * textures[i]->height;
+		}
+	}
+	// allocate buffers for GPU data
+	bvhNodeData = new Buffer( nodeCount * sizeof( BVH::BVHNode ) );
+	triangleData = new Buffer( primCount * 3 * sizeof( float4 ) );
+	triangleIdxData = new Buffer( idxCount * sizeof( uint ) );
+	offsetData = new Buffer( (int)meshPool.size() * 2 * sizeof( uint4 ) );
+	transformData = new Buffer( (int)meshPool.size() * 2 * sizeof( mat4 ) );
+	fatTriData = new Buffer( primCount * sizeof( FatTri ) );
+	skyData = new Buffer( sky->width * sky->height * sizeof( float4 ) );
+	ldrData = new Buffer( ldrPixelCount * sizeof( uint ) );
+	hdrData = new Buffer( hdrPixelCount * sizeof( float4 ) );
+	materialData = new Buffer( (int)materials.size() * sizeof( RenderMaterial ) );
+	// populate the buffers
+	uchar* bvhPtr = (uchar*)bvhNodeData->GetHostPtr();
+	uchar* triPtr = (uchar*)triangleData->GetHostPtr();
+	uchar* fatPtr = (uchar*)fatTriData->GetHostPtr();
+	uchar* idxPtr = (uchar*)triangleIdxData->GetHostPtr();
+	uint4* offset = (uint4*)offsetData->GetHostPtr();
+	memcpy( bvhPtr, tlas.bvhNode, tlas.newNodePtr * sizeof( BVH::BVHNode ) );
+	memcpy( idxPtr, tlas.triIdx, meshPool.size() * sizeof( uint ) );
+	for (int s = sky->width * sky->height, i = 0; i < s; i++)
+		((float4*)skyData->GetHostPtr())[i] = float4( sky->pixels[i], 0 );
+	bvhPtr += 2 * (int)meshPool.size() * sizeof( BVH::BVHNode );
+	idxPtr += (int)meshPool.size() * sizeof( uint );
+	for (int s = (int)meshPool.size(), i = 0; i < s; i++)
+	{
+		Mesh* mesh = meshPool[i];
+		memcpy( bvhPtr, mesh->bvh->bvhNode, mesh->bvh->newNodePtr * 32 );
+		memcpy( idxPtr, mesh->bvh->triIdx, mesh->bvh->idxCount * 4 );
+		memcpy( fatPtr, mesh->triangles.data(), ((int)mesh->vertices.size() / 3) * sizeof( FatTri ) );
+		memcpy( triPtr, mesh->vertices.data(), (int)mesh->vertices.size() * 16 );
+		offset[i * 2 + 0] = uint4(
+			(int)(bvhPtr - (uchar*)bvhNodeData->GetHostPtr()) / 16,
+			(int)(idxPtr - (uchar*)triangleIdxData->GetHostPtr()) / 4,
+			(int)(triPtr - (uchar*)triangleData->GetHostPtr()) / 16,
+			(int)(fatPtr - (uchar*)fatTriData->GetHostPtr()) / sizeof( FatTri )
+		);
+		offset[i * 2 + 1] = uint4(
+			0,
+			0,
+			0,
+			0
+		);
+		memcpy( transformData->GetHostPtr() + i * 32, &mesh->transform, 64 );
+		memcpy( transformData->GetHostPtr() + i * 32 + 16, &mesh->invTransform, 64 );
+		bvhPtr += mesh->bvh->newNodePtr * 32;
+		idxPtr += mesh->bvh->idxCount * 4;
+		fatPtr += ((int)mesh->vertices.size() / 3) * sizeof( FatTri );
+		triPtr += (int)mesh->vertices.size() * 16;
+	}
+	// copy texture pixels to buffers
+	vector<int> offsets;
+	int ldrOffset = 0, hdrOffset = 0;
+	for (int s = (int)textures.size(), i = 0; i < s; i++)
+	{
+		int texelCount = textures[i]->width * textures[i]->height;
+		if (textures[i]->flags & Texture::HDR)
+		{
+			memcpy( (float4*)hdrData->GetHostPtr() + hdrOffset, textures[i]->fdata, texelCount * sizeof( float4 ) );
+			offsets.push_back( hdrOffset );
+			hdrOffset += texelCount;
+		}
+		else
+		{
+			memcpy( (uint*)ldrData->GetHostPtr() + ldrOffset, textures[i]->idata, texelCount * sizeof( uint ) );
+			offsets.push_back( ldrOffset );
+			ldrOffset += texelCount;
+		}
+	}
+	// convert materials
+	for (int s = (int)materials.size(), i = 0; i < s; i++)
+	{
+		RenderMaterial m( materials[i], offsets );
+		((RenderMaterial*)materialData->GetHostPtr())[i] = m;
+	}
+	// send the data to the gpu
+	bvhNodeData->CopyToDevice();
+	triangleData->CopyToDevice();
+	fatTriData->CopyToDevice();
+	triangleIdxData->CopyToDevice();
+	offsetData->CopyToDevice();
+	transformData->CopyToDevice();
+	skyData->CopyToDevice();
+	ldrData->CopyToDevice();
+	hdrData->CopyToDevice();
+	materialData->CopyToDevice();
 }
 
 //  +-----------------------------------------------------------------------------+
-//  |  BVH::Intersect                                                             |
-//  |  Intersect a BVH with a ray.                                          LH2'24|
+//  |  Scene::UpdateGPUData                                                       |
+//  |  Synchronize TLAS and transform changes to the GPU.                         |
+//  |  Note that this only handles scenes with rigid animation.             LH2'24|
 //  +-----------------------------------------------------------------------------+
-void BVH::Intersect( Ray& ray )
+void Scene::UpdateGPUData()
 {
-	BVHNode* node = &bvhNode[0], * stack[64];
-	uint stackPtr = 0;
+	// tlas and matrices will be synced each frame
+	uchar* idxPtr = (uchar*)triangleIdxData->GetHostPtr();
+	uchar* bvhPtr = (uchar*)bvhNodeData->GetHostPtr();
+	memcpy( bvhPtr, tlas.bvhNode, tlas.newNodePtr * 32 );
+	memcpy( idxPtr, tlas.triIdx, meshPool.size() * 4 );
+	for (int s = (int)meshPool.size(), i = 0; i < s; i++)
+	{
+		memcpy( transformData->GetHostPtr() + i * 32, &meshPool[i]->transform, 64 );
+		memcpy( transformData->GetHostPtr() + i * 32 + 16, &meshPool[i]->invTransform, 64 );
+	}
+	// send the data to the gpu
+	bvhNodeData->CopyToDevice( 0, tlas.newNodePtr * 32 /* just the tlas */ );
+	triangleIdxData->CopyToDevice( 0, (int)meshPool.size() * 4 /* just the tlas */ );
+	transformData->CopyToDevice();
+}
+
+#endif
+
+//  +-----------------------------------------------------------------------------+
+//  |  Scene::Intersect                                                           |
+//  |  Intersect a TLAS with a ray.                                         LH2'24|
+//  +-----------------------------------------------------------------------------+
+int Scene::Intersect( Ray& ray )
+{
+	// use a local stack instead of a recursive function
+	BVH::BVHNode* node = &tlas.bvhNode[0], * stack[128];
+	uint stackPtr = 0, steps = 0;
+	// traversl loop; terminates when the stack is empty
 	while (1)
 	{
+		steps++;
 		if (node->isLeaf())
 		{
-			for (uint i = 0; i < node->triCount; i++) IntersectTri( ray, triIdx[node->leftFirst + i] );
+			// current node is a leaf: intersect BLAS
+			int blasCount = node->triCount;
+			for (int i = 0; i < blasCount; i++)
+			{
+				const uint meshIdx = tlas.triIdx[node->leftFirst + i];
+				steps += meshPool[meshIdx]->Intersect( ray );
+			}
+			// pop a node from the stack; terminate if none left
 			if (stackPtr == 0) break; else node = stack[--stackPtr];
 			continue;
 		}
-		BVHNode* child1 = &bvhNode[node->leftFirst], * child2 = &bvhNode[node->leftFirst + 1];
+		// current node is an interior node: visit child nodes, ordered
+		BVH::BVHNode* child1 = &tlas.bvhNode[node->leftFirst];
+		BVH::BVHNode* child2 = &tlas.bvhNode[node->leftFirst + 1];
 		float dist1 = child1->Intersect( ray ), dist2 = child2->Intersect( ray );
 		if (dist1 > dist2) { swap( dist1, dist2 ); swap( child1, child2 ); }
 		if (dist1 == 1e30f)
@@ -2343,160 +2562,5 @@ void BVH::Intersect( Ray& ray )
 			if (dist2 != 1e30f) stack[stackPtr++] = child2;
 		}
 	}
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::BVHNode::Intersect                                                    |
-//  |  Calculate intersection between a ray and the node bounds.            LH2'24|
-//  +-----------------------------------------------------------------------------+
-void BVH::IntersectTri( Ray& ray, const uint idx )
-{
-	// Moeller-Trumbore ray/triangle intersection algorithm
-	const uint vertIdx = idx * 3;
-	const float3 edge1 = tris[vertIdx + 1] - tris[vertIdx];
-	const float3 edge2 = tris[vertIdx + 2] - tris[vertIdx];
-	const float3 h = cross( ray.D, edge2 );
-	const float a = dot( edge1, h );
-	if (fabs( a ) < 0.00001f) return; // ray parallel to triangle
-	const float f = 1 / a;
-	const float3 s = ray.O - float3( tris[vertIdx] );
-	const float u = f * dot( s, h );
-	if (u < 0 || u > 1) return;
-	const float3 q = cross( s, edge1 );
-	const float v = f * dot( ray.D, q );
-	if (v < 0 || u + v > 1) return;
-	const float t = f * dot( edge2, q );
-	if (t > 0.0001f && t < ray.hit.t) ray.hit.t = t, ray.hit.u = u, ray.hit.v = v, ray.hit.prim = idx;
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::BVHNode::Intersect                                                    |
-//  |  Calculate intersection between a ray and the node bounds.            LH2'24|
-//  +-----------------------------------------------------------------------------+
-float BVH::BVHNode::Intersect( const Ray& ray )
-{
-	// "slab test" ray/AABB intersection
-	float tx1 = (aabbMin.x - ray.O.x) * ray.rD.x, tx2 = (aabbMax.x - ray.O.x) * ray.rD.x;
-	float tmin = min( tx1, tx2 ), tmax = max( tx1, tx2 );
-	float ty1 = (aabbMin.y - ray.O.y) * ray.rD.y, ty2 = (aabbMax.y - ray.O.y) * ray.rD.y;
-	tmin = max( tmin, min( ty1, ty2 ) ), tmax = min( tmax, max( ty1, ty2 ) );
-	float tz1 = (aabbMin.z - ray.O.z) * ray.rD.z, tz2 = (aabbMax.z - ray.O.z) * ray.rD.z;
-	tmin = max( tmin, min( tz1, tz2 ) ), tmax = min( tmax, max( tz1, tz2 ) );
-	if (tmax >= tmin && tmin < ray.hit.t && tmax >= 0) return tmin; else return 1e30f;
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::Subdivide                                                             |
-//  |  Recursively subdivide a BVH node.                                    LH2'24|
-//  +-----------------------------------------------------------------------------+
-void BVH::Subdivide( uint nodeIdx, uint depth, uint& nodePtr, float3& centroidMin, float3& centroidMax )
-{
-	BVHNode& node = bvhNode[nodeIdx];
-	// determine split axis using SAH
-	int axis, splitPos;
-	float splitCost = FindBestSplitPlane( node, axis, splitPos, centroidMin, centroidMax );
-	// terminate recursion
-	float nosplitCost = node.CalculateNodeCost();
-	if (splitCost >= nosplitCost) return;
-	// in-place partition
-	int i = node.leftFirst;
-	int j = i + node.triCount - 1;
-	float scale = BVHBINS / (centroidMax[axis] - centroidMin[axis]);
-	while (i <= j)
-	{
-		// use the exact calculation we used for binning to prevent rare inaccuracies
-		int binIdx = min( BVHBINS - 1, (int)((centroid[triIdx[i]][axis] - centroidMin[axis]) * scale) );
-		if (binIdx < splitPos) i++; else swap( triIdx[i], triIdx[j--] );
-	}
-	// abort split if one of the sides is empty
-	uint leftCount = i - node.leftFirst;
-	if (leftCount == 0 || leftCount == node.triCount) return; // never happens for dragon mesh, nice
-	// create child nodes
-	int leftChildIdx = nodePtr++;
-	int rightChildIdx = nodePtr++;
-	bvhNode[leftChildIdx].leftFirst = node.leftFirst;
-	bvhNode[leftChildIdx].triCount = leftCount;
-	bvhNode[rightChildIdx].leftFirst = i;
-	bvhNode[rightChildIdx].triCount = node.triCount - leftCount;
-	node.leftFirst = leftChildIdx;
-	node.triCount = 0;
-	// recurse
-	UpdateNodeBounds( leftChildIdx, centroidMin, centroidMax );
-	Subdivide( leftChildIdx, depth + 1, nodePtr, centroidMin, centroidMax );
-	UpdateNodeBounds( rightChildIdx, centroidMin, centroidMax );
-	Subdivide( rightChildIdx, depth + 1, nodePtr, centroidMin, centroidMax );
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::FindBestSplitPlane                                                    |
-//  |  Use the Surface Area Heuristic to place a split plane.               LH2'24|
-//  +-----------------------------------------------------------------------------+
-float BVH::FindBestSplitPlane( BVHNode& node, int& axis, int& splitPos, float3& centroidMin, float3& centroidMax )
-{
-	float bestCost = 1e30f;
-	for (int a = 0; a < 3; a++)
-	{
-		float boundsMin = centroidMin[a], boundsMax = centroidMax[a];
-		if (boundsMin == boundsMax) continue;
-		// populate the bins
-		float scale = BVHBINS / (boundsMax - boundsMin);
-		float leftCountArea[BVHBINS - 1], rightCountArea[BVHBINS - 1];
-		int leftSum = 0, rightSum = 0;
-		struct Bin { aabb bounds; int triCount = 0; } bin[BVHBINS];
-		for (uint i = 0; i < node.triCount; i++)
-		{
-			uint idx = triIdx[node.leftFirst + i], vertIdx = idx * 3;
-			int binIdx = min( BVHBINS - 1, (int)((centroid[idx][a] - boundsMin) * scale) );
-			bin[binIdx].triCount++;
-			bin[binIdx].bounds.Grow( tris[vertIdx] );
-			bin[binIdx].bounds.Grow( tris[vertIdx + 1] );
-			bin[binIdx].bounds.Grow( tris[vertIdx + 2] );
-		}
-		// gather data for the 7 planes between the 8 bins
-		aabb leftBox, rightBox;
-		for (int i = 0; i < BVHBINS - 1; i++)
-		{
-			leftSum += bin[i].triCount;
-			leftBox.Grow( bin[i].bounds );
-			leftCountArea[i] = leftSum * leftBox.Area();
-			rightSum += bin[BVHBINS - 1 - i].triCount;
-			rightBox.Grow( bin[BVHBINS - 1 - i].bounds );
-			rightCountArea[BVHBINS - 2 - i] = rightSum * rightBox.Area();
-		}
-		// calculate SAH cost for the 7 planes
-		scale = (boundsMax - boundsMin) / BVHBINS;
-		for (int i = 0; i < BVHBINS - 1; i++)
-		{
-			const float planeCost = leftCountArea[i] + rightCountArea[i];
-			if (planeCost < bestCost)
-				axis = a, splitPos = i + 1, bestCost = planeCost;
-		}
-	}
-	return bestCost;
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::UpdateNodeBounds                                                      |
-//  |  Update node AABB so all triangles fit in it.                         LH2'24|
-//  +-----------------------------------------------------------------------------+
-void BVH::UpdateNodeBounds( const uint nodeIdx, float3& centroidMin, float3& centroidMax )
-{
-	BVHNode& node = bvhNode[nodeIdx];
-	float4 aabbMin( 1e30f ), aabbMax( -1e30f );
-	float4 midMin( 1e30f ), midMax( -1e30f );
-	for (uint first = node.leftFirst, i = 0; i < node.triCount; i++)
-	{
-		uint leafTriIdx = triIdx[first + i];
-		uint vertIdx = leafTriIdx * 3;
-		aabbMin = fminf( aabbMin, tris[vertIdx] );
-		aabbMin = fminf( aabbMin, tris[vertIdx + 1] );
-		aabbMin = fminf( aabbMin, tris[vertIdx + 2] );
-		aabbMax = fmaxf( aabbMax, tris[vertIdx] );
-		aabbMax = fmaxf( aabbMax, tris[vertIdx + 1] );
-		aabbMax = fmaxf( aabbMax, tris[vertIdx + 2] );
-		midMin = fminf( midMin, centroid[leafTriIdx] );
-		midMax = fmaxf( midMax, centroid[leafTriIdx] );
-	}
-	node.aabbMin = aabbMin, centroidMin = midMin;
-	node.aabbMax = aabbMax, centroidMax = midMax;
+	return steps;
 }

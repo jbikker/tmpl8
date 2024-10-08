@@ -4,7 +4,8 @@
 
 #pragma once
 
-namespace Tmpl8 {
+namespace Tmpl8
+{
 
 // helper macro for line clipping
 #define OUTCODE(x,y) (((x)<xmin)?1:(((x)>xmax)?2:0))+(((y)<ymin)?4:(((y)>ymax)?8:0))
@@ -62,7 +63,6 @@ public:
 	void Clear( uint c );
 	void Line( float x1, float y1, float x2, float y2, uint c );
 	void Plot( int x, int y, uint c );
-	void PlotSubpixel( float x, float y, uint c );
 	void LoadFromFile( const char* file );
 	void CopyTo( Surface* dst, int x, int y );
 	void Box( int x1, int y1, int x2, int y2, uint color );

@@ -1,4 +1,4 @@
-#include "template/common.h" // use SCRWIDTH, SCRHEIGHT from cpu side
+#include "../template/common.h" // use SCRWIDTH, SCRHEIGHT from cpu side
 
 // "MandelLeaves" by WAHa_06x36 - https://www.shadertoy.com/view/MttBz8
 

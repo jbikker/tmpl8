@@ -23,6 +23,11 @@ float safercp( const float x )
 	return x > 1e-10f ? (1.0f / x) : (x < -1e-10f ? (1.0f / x) : 1e30f); 
 }
 
+float3 safercp3( const float3 v ) 
+{ 
+	return (float3)( safercp( v.x ), safercp( v.y ), safercp( v.z ) );
+}
+
 float3 transformPoint( const float3 P, const float4* T )
 {
 	const float4 p = (float4)( P, 1 );
@@ -33,6 +38,14 @@ float3 transformVector( const float3 P, const float4* T )
 {
 	const float4 p = (float4)( P, 0 );
 	return (float3)( dot( T[0], p ), dot( T[1], p ), dot( T[2], p ) ); 
+}
+
+uint float3ToUint( const float3 v )
+{
+	const int r = (int)min( 255.0f, v.x * 256.0f);
+	const int g = (int)min( 255.0f, v.y * 256.0f);
+	const int b = (int)min( 255.0f, v.z * 256.0f);
+	return (r << 16) + (g << 8) + b;
 }
 
 // EOF

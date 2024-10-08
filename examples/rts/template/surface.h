@@ -4,7 +4,8 @@
 
 #pragma once
 
-namespace Tmpl8 {
+namespace Tmpl8
+{
 
 // helper macro for line clipping
 #define OUTCODE(x,y) (((x)<xmin)?1:(((x)>xmax)?2:0))+(((y)<ymin)?4:(((y)>ymax)?8:0))

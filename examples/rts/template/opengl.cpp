@@ -191,6 +191,7 @@ void Shader::Compile( const char* vtext, const char* ftext )
 	glAttachShader( ID, pixel );
 	glBindAttribLocation( ID, 0, "pos" );
 	glBindAttribLocation( ID, 1, "tuv" );
+	CheckGL();
 	glLinkProgram( ID );
 	CheckProgram( ID );
 	CheckGL();

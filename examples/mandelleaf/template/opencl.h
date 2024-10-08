@@ -15,9 +15,11 @@ public:
 	~Buffer();
 	cl_mem* GetDevicePtr() { return &deviceBuffer; }
 	unsigned int* GetHostPtr();
-	void CopyToDevice( bool blocking = true );
+	void CopyToDevice( const bool blocking = true );
+	void CopyToDevice( const int offset, const int size, const bool blocking = true );
 	void CopyToDevice2( bool blocking, cl_event* e = 0, const size_t s = 0 );
-	void CopyFromDevice( bool blocking = true );
+	void CopyFromDevice( const bool blocking = true );
+	void CopyFromDevice( const int offset, const int size, const bool blocking = true );
 	void CopyTo( Buffer* buffer );
 	void Clear();
 	// data members
@@ -163,11 +165,12 @@ public:
 private:
 	void SetArgument( int idx, cl_mem* buffer );
 	void SetArgument( int idx, Buffer* buffer );
-	void SetArgument( int idx, float );
-	void SetArgument( int idx, int );
-	void SetArgument( int idx, float2 );
 	void SetArgument( int idx, float3 );
-	void SetArgument( int idx, float4 );
+	template<class T> void SetArgument( int idx, T value )
+	{
+		CheckCLStarted();
+		clSetKernelArg( kernel, idx, sizeof( T ), &value );
+	}
 	// other methods
 public:
 	static bool InitCL();
@@ -175,6 +178,7 @@ public:
 	static void KillCL();
 private:
 	// data members
+	char* sourceFile = 0;
 	Buffer* acqBuffer = 0;
 	cl_kernel kernel;
 	cl_mem vbo_cl;
@@ -186,6 +190,7 @@ private:
 	inline static bool isNVidia = false, isAMD = false, isIntel = false, isOther = false;
 	inline static bool isAmpere = false, isTuring = false, isPascal = false;
 	inline static int vendorLines = 0;
+	inline static vector<Kernel*> loadedKernels;
 public:
 	inline static bool candoInterop = false, clStarted = false;
 };

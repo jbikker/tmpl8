@@ -88,14 +88,14 @@ void Game::Render()
 		float sy = (m_Rotated[i].y * 3000.0f / (m_Rotated[i].z + 5.0f)) + (SCRHEIGHT / 2);
 		float size = 170.0f / (m_Rotated[i].z + 5.0f);
 		m_Dot->SetFrame( dotIdx );
-		m_Dot->DrawScaledAdditiveSubpixel( sx - size / 2, sy - size / 2, size, size, screen );
+		// m_Dot->DrawScaledAdditiveSubpixel( sx - size / 2, sy - size / 2, size, size, screen );
 	}
 	for(; i < DOTS; i++)
 	{
 		// draw subpixel particle
 		float sx = (m_Rotated[i].x * 3000.0f / (m_Rotated[i].z + 5.0f)) + (SCRWIDTH / 2);
 		float sy = (m_Rotated[i].y * 3000.0f / (m_Rotated[i].z + 5.0f)) + (SCRHEIGHT / 2);
-		screen->PlotSubpixel( sx, sy, 0xffffff );
+		// screen->PlotSubpixel( sx, sy, 0xffffff );
 	}
 }
 //-----------------------------------------------------------

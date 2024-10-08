@@ -18,7 +18,8 @@
 
 #pragma once
 
-namespace Tmpl8 {
+namespace Tmpl8
+{
 
 #pragma warning ( push )
 #pragma warning ( disable: 4201 /* nameless struct / union */ )
@@ -59,12 +60,14 @@ struct ALIGN( 16 ) int4
 	union { struct { int x, y, z, w; }; int cell[4]; };
 	int& operator [] ( const int n ) { return cell[n]; }
 };
+struct float3;
 struct ALIGN( 16 ) int3
 {
 	int3() = default;
 	int3( const int a, const int b, const int c ) : x( a ), y( b ), z( c ) {}
 	int3( const int a ) : x( a ), y( a ), z( a ) {}
 	int3( const int4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
+	int3( const float3 & a );
 	union { struct { int x, y, z; int dummy; }; int cell[4]; };
 	int& operator [] ( const int n ) { return cell[n]; }
 };
@@ -84,10 +87,10 @@ struct ALIGN( 16 ) uint3
 	uint3( const uint a, const uint b, const uint c ) : x( a ), y( b ), z( c ) {}
 	uint3( const uint a ) : x( a ), y( a ), z( a ) {}
 	uint3( const uint4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
+	uint3( const float3 & a );
 	union { struct { uint x, y, z; uint dummy; }; uint cell[4]; };
 	uint& operator [] ( const int n ) { return cell[n]; }
 };
-struct float3;
 struct ALIGN( 16 ) float4
 {
 	float4() = default;
@@ -112,6 +115,7 @@ struct float3
 	float3( const int4 a ) : x( (float)a.x ), y( (float)a.y ), z( (float)a.z ) {}
 	float2 xy() { return float2( x, y ); }
 	float2 yz() { return float2( y, z ); }
+	float halfArea() { return x < -1e30f ? 0 : (x * y + y * z + z * x); } // for SAH calculations
 	union { struct { float x, y, z; }; float cell[3]; };
 	float& operator [] ( const int n ) { return cell[n]; }
 };
@@ -137,9 +141,8 @@ inline float rsqrtf( const float x ) { return 1.0f / sqrtf( x ); }
 inline constexpr float sqrf( const float x ) { return x * x; }
 inline constexpr int sqr( int x ) { return x * x; }
 inline float3 expf( const float3& a ) { return float3( expf( a.x ), expf( a.y ), expf( a.z ) ); }
-inline float safercp( const float x ) { return x > 1e-10f ? (1.0f / x) : (x < -1e-10f ? (1.0f / x) : 1e30f); }
+inline float safercp( const float x ) { return x > 1e-12f ? (1.0f / x) : (x < -1e-12f ? (1.0f / x) : 1e30f); }
 inline float3 safercp( const float3 a ) { return float3( safercp( a.x ), safercp( a.y ), safercp( a.z ) ); }
-
 inline float2 make_float2( const float a, float b ) { float2 f2; f2.x = a, f2.y = b; return f2; }
 inline float2 make_float2( const float s ) { return make_float2( s, s ); }
 inline float2 make_float2( const float3& a ) { return make_float2( a.x, a.y ); }
@@ -998,3 +1001,28 @@ float Rand( float range );
 // Perlin noise
 float noise2D( const float x, const float y );
 float noise3D( const float x, const float y, const float z );
+
+// half-floats
+float half_to_float( const half x );
+half float_to_half( const float x );
+
+// bad float detection (method from OpenCV)
+inline bool isnan( const float value )
+{
+	const uint ieee754 = *reinterpret_cast<const uint*>(&value);
+	return (ieee754 & 0x7fffffff) > 0x7f800000;
+}
+inline bool isinf( const float value )
+{
+	const uint ieee754 = *reinterpret_cast<const uint*>(&value);
+	return (ieee754 & 0x7fffffff) == 0x7f800000;
+}
+inline bool badfloat( const float value )
+{
+	const uint ieee754 = *reinterpret_cast<const uint*>(&value);
+	return (ieee754 & 0x7fffffff) >= 0x7f800000;
+}
+inline bool badfloat3( const float3 v )
+{
+	return badfloat( v.x + v.y + v.z );
+}

@@ -1,5 +1,5 @@
-#include "template/common.h"
-#include "cl/tools.cl"
+#include "../template/common.h"
+#include "tools.cl"
 
 kernel void render( global uint* pixels, const int offset )
 {

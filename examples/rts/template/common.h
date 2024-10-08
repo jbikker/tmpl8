@@ -5,6 +5,8 @@
 // common.h is to be included in host and device code and stores
 // global settings and defines.
 
+#pragma once
+
 // default screen resolution
 #define SCRWIDTH	1024
 #define SCRHEIGHT	768

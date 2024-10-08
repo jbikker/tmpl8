@@ -1401,7 +1401,7 @@ extern "C" {
 		}
 		*out_exts = (const char*)glad_glGetString( GL_EXTENSIONS );
 		return 1;
-		}
+	}
 	static int glad_gl_has_extension( const char* exts, char** exts_i, const char* ext ) {
 		if (exts_i) {
 			unsigned int index;
@@ -1569,10 +1569,10 @@ extern "C" {
 			if (handle != NULL) {
 				return handle;
 			}
-			}
+		}
 
 		return NULL;
-			}
+	}
 
 	static void glad_close_dlopen_handle( void* handle ) {
 		if (handle != NULL) {
@@ -1697,7 +1697,7 @@ extern "C" {
 #endif /* GLAD_GL */
 
 #ifdef __cplusplus
-	}
+}
 #endif
 
 // EOF

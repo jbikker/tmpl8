@@ -129,6 +129,10 @@ void main()
 	freopen_s( &file, "CON", "w", stderr );
 	SetWindowPos( GetConsoleWindow(), HWND_TOP, 0, 0, 1280, 800, 0 );
 	glfwShowWindow( window );
+	// use the new console window to print some important things
+	printf( "Running Tmpl8-2024, updated on July 21\n" );
+	char dir[2048];
+	printf( "Working directory: %s\n", getcwd( dir, 2048 ) );
 #endif
 	// initialize application
 	InitRenderTarget( SCRWIDTH, SCRHEIGHT );
@@ -1397,7 +1401,7 @@ extern "C" {
 		}
 		*out_exts = (const char*)glad_glGetString( GL_EXTENSIONS );
 		return 1;
-		}
+	}
 	static int glad_gl_has_extension( const char* exts, char** exts_i, const char* ext ) {
 		if (exts_i) {
 			unsigned int index;
@@ -1565,10 +1569,10 @@ extern "C" {
 			if (handle != NULL) {
 				return handle;
 			}
-			}
+		}
 
 		return NULL;
-			}
+	}
 
 	static void glad_close_dlopen_handle( void* handle ) {
 		if (handle != NULL) {
@@ -1693,7 +1697,7 @@ extern "C" {
 #endif /* GLAD_GL */
 
 #ifdef __cplusplus
-	}
+}
 #endif
 
 // EOF
