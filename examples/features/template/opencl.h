@@ -188,7 +188,7 @@ private:
 	inline static cl_command_queue queue, queue2;
 	inline static char* log = 0;
 	inline static bool isNVidia = false, isAMD = false, isIntel = false, isOther = false;
-	inline static bool isAmpere = false, isTuring = false, isPascal = false;
+	inline static bool isAmpere = false, isTuring = false, isPascal = false, isAda = false, isHopper = false;
 	inline static int vendorLines = 0;
 	inline static vector<Kernel*> loadedKernels;
 public:

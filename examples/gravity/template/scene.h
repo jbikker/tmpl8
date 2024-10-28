@@ -573,7 +573,7 @@ public:
 	static inline Buffer* triangleIdxData;						// triangle index arrays
 	static inline Buffer* offsetData;							// blas offsets
 	static inline Buffer* transformData;						// blas transforms
-	static inline Buffer* skyData;								// skybox pixels
+	static inline Buffer* skyData = 0;							// skybox pixels
 	static inline Buffer* ldrData, * hdrData;					// texture data (regular and hdr)
 	static inline Buffer* materialData;							// materials 
 	// methods

@@ -247,7 +247,7 @@ float3 TransformVector_SSE( const __m128& a, const mat4& M )
 }
 
 // 16-bit floats
-uint as_uint( const float x ) { return *(uint*)&x; }
+static uint as_uint( const float x ) { return *(uint*)&x; }
 float as_float( const uint x ) { return *(float*)&x; }
 float half_to_float( const half x )
 {

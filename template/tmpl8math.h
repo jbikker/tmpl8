@@ -67,7 +67,7 @@ struct ALIGN( 16 ) int3
 	int3( const int a, const int b, const int c ) : x( a ), y( b ), z( c ) {}
 	int3( const int a ) : x( a ), y( a ), z( a ) {}
 	int3( const int4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
-	int3( const float3 & a );
+	int3( const float3& a );
 	union { struct { int x, y, z; int dummy; }; int cell[4]; };
 	int& operator [] ( const int n ) { return cell[n]; }
 };
@@ -87,7 +87,7 @@ struct ALIGN( 16 ) uint3
 	uint3( const uint a, const uint b, const uint c ) : x( a ), y( b ), z( c ) {}
 	uint3( const uint a ) : x( a ), y( a ), z( a ) {}
 	uint3( const uint4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
-	uint3( const float3 & a );
+	uint3( const float3& a );
 	union { struct { uint x, y, z; uint dummy; }; uint cell[4]; };
 	uint& operator [] ( const int n ) { return cell[n]; }
 };

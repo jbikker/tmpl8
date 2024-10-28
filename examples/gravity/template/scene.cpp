@@ -2490,7 +2490,7 @@ void Scene::InitializeGPUData()
 	triangleIdxData->CopyToDevice();
 	offsetData->CopyToDevice();
 	transformData->CopyToDevice();
-	skyData->CopyToDevice();
+	if (skyData) skyData->CopyToDevice();
 	ldrData->CopyToDevice();
 	hdrData->CopyToDevice();
 	materialData->CopyToDevice();

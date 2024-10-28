@@ -334,6 +334,7 @@ Kernel::Kernel( char* file, char* entryPoint )
 	if (isAmpere) csText = "#define ISAMPERE\n" + csText, vendorLines++;
 	if (isTuring) csText = "#define ISTURING\n" + csText, vendorLines++;
 	if (isPascal) csText = "#define ISPASCAL\n" + csText, vendorLines++;
+	if (isAda) csText = "#define ISADA\n" + csText, vendorLines++;
 	// expand #include directives: cl compiler doesn't support these natively
 	// warning: this simple system does not handle nested includes.
 	struct Include { int start, end; string file; } includes[64];
@@ -356,12 +357,12 @@ Kernel::Kernel( char* file, char* entryPoint )
 		if (pos == string::npos) FatalError( "Expected \" after #include in shader." );
 		size_t end = csText.find( "\"", pos + 1 );
 		if (end == string::npos) FatalError( "Expected second \" after #include in shader." );
-		string srcFile = csText.substr( pos + 1, end - pos - 1 );
+		string incFile = csText.substr( pos + 1, end - pos - 1 );
 		// load include file content
-		string incText = TextFileRead( srcFile.c_str() );
+		string incText = TextFileRead( incFile.c_str() );
 		includes[Ninc].end = includes[Ninc].start + LineCount( incText );
-		includes[Ninc++].file = srcFile;
-		if (incText.size() == 0) FatalError( "#include file not found:\n%s", srcFile.c_str() );
+		includes[Ninc++].file = incFile;
+		if (incText.size() == 0) FatalError( "#include file not found:\n%s", incFile.c_str() );
 		// cleanup include file content: we get some crap first sometimes, but why?
 		int firstValidChar = 0;
 		while (incText[firstValidChar] < 0) firstValidChar++;
@@ -381,14 +382,17 @@ Kernel::Kernel( char* file, char* entryPoint )
 	// why does the nvidia compiler not support these:
 	// -cl-nv-maxrregcount=64 not faster than leaving it out (same for 128)
 	// -cl-no-subgroup-ifp ? fails on nvidia.
-#if 1
 	// AMD-compatible compilation, thanks Rosalie de Winther
 	char buildString[1024];
-	strcpy( buildString, "-cl-std=CL2.0 -cl-fast-relaxed-math -cl-mad-enable -cl-single-precision-constant -cl-denorms-are-zero" );
+	strcpy( buildString, "-cl-std=CL2.0 " );
+	strcat( buildString, "-cl-strict-aliasing " );
+	strcat( buildString, "-cl-fast-relaxed-math " );
+	strcat( buildString, "-cl-single-precision-constant " );
+	// strcat( buildString, "-cl-uniform-work-group-size " );
+	// strcat( buildString, "-cl-no-subgroup-ifp " );
+	if (isNVidia) strcat( buildString, "-cl-nv-opt-level=9 " );
+	// strcat( buildString, "-cl-nv-maxrregcount=32 " );
 	error = clBuildProgram( program, 0, NULL, buildString, NULL, NULL );
-#else
-	error = clBuildProgram( program, 0, NULL, "-cl-nv-verbose -cl-fast-relaxed-math -cl-mad-enable -cl-single-precision-constant", NULL, NULL );
-#endif
 	// handle errors
 	if (error == CL_SUCCESS)
 	{
@@ -482,10 +486,8 @@ Kernel::Kernel( char* file, char* entryPoint )
 	if (kernel == 0) FatalError( "clCreateKernel failed: entry point not found." );
 	CHECKCL( error );
 	loadedKernels.push_back( this );
-	// restore working directory and cleanup
+	// restore working directory
 	chdir( dirBackup );
-	delete sourceFile;
-	delete dir;
 }
 
 Kernel::Kernel( cl_program& existingProgram, char* entryPoint )
@@ -579,8 +581,8 @@ bool Kernel::InitCL()
 	printf( "Device # %u, %s (%s)\n", deviceUsed, device_string, device_platform );
 	// print local memory size
 	size_t localMem;
-	clGetDeviceInfo( devices[deviceUsed], CL_DEVICE_LOCAL_MEM_SIZE, 1024, NULL, &localMem );
-	printf( "Local memory size: %iKB\n", (int)localMem );
+	clGetDeviceInfo( devices[deviceUsed], CL_DEVICE_LOCAL_MEM_SIZE, sizeof( size_t ), &localMem, NULL );
+	printf( "Local memory size: %iKB\n", (int)localMem >> 10 );
 	// digest device string
 	char* d = device_string;
 	for (int i = 0; i < strlen( d ); i++) if (d[i] >= 'A' && d[i] <= 'Z') d[i] -= 'A' - 'a';
@@ -590,6 +592,7 @@ bool Kernel::InitCL()
 		if (strstr( d, "rtx" ))
 		{
 			// detect Ampere GPUs
+			if (strstr( d, "4050" ) || strstr( d, "4060" ) || strstr( d, "4070" ) || strstr( d, "4080" ) || strstr( d, "4090" )) isAda = true;
 			if (strstr( d, "3050" ) || strstr( d, "3060" ) || strstr( d, "3070" ) || strstr( d, "3080" ) || strstr( d, "3090" )) isAmpere = true;
 			if (strstr( d, "a2000" ) || strstr( d, "a3000" ) || strstr( d, "a4000" ) || strstr( d, "a5000" ) || strstr( d, "a6000" )) isAmpere = true;
 			// detect Turing GPUs
@@ -640,6 +643,7 @@ bool Kernel::InitCL()
 		if (isAmpere) printf( "AMPERE class.\n" );
 		else if (isTuring) printf( "TURING class.\n" );
 		else if (isPascal) printf( "PASCAL class.\n" );
+		else if (isAda) printf( "ADA class.\n" );
 		else printf( "PRE-PASCAL hardware (warning: slow).\n" );
 	}
 	else if (isAMD)
@@ -655,7 +659,7 @@ bool Kernel::InitCL()
 		printf( "identification failed.\n" );
 	}
 	// create a command-queue
-	cl_queue_properties props[] = { 0 };
+	cl_queue_properties props[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0 };
 	queue = clCreateCommandQueueWithProperties( context, devices[deviceUsed], props, &error );
 	if (!CHECKCL( error )) return false;
 	// create a second command queue for asynchronous copies
@@ -689,11 +693,18 @@ void Kernel::CheckCLStarted()
 void Kernel::SetArgument( int idx, Buffer* buffer )
 {
 	CheckCLStarted();
-	clSetKernelArg( kernel, idx, sizeof( cl_mem ), buffer->GetDevicePtr() );
-	if (buffer->type & Buffer::TARGET)
+	if (!buffer)
 	{
-		if (acqBuffer) FatalError( "Kernel can take only one texture target buffer argument." );
-		acqBuffer = buffer;
+		clSetKernelArg( kernel, idx, sizeof( cl_mem ), 0 );
+	}
+	else
+	{
+		clSetKernelArg( kernel, idx, sizeof( cl_mem ), buffer->GetDevicePtr() );
+		if (buffer->type & Buffer::TARGET)
+		{
+			if (acqBuffer) FatalError( "Kernel can take only one texture target buffer argument." );
+			acqBuffer = buffer;
+		}
 	}
 }
 void Kernel::SetArgument( int idx, float3 value )

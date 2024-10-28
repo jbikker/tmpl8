@@ -67,7 +67,7 @@ struct ALIGN( 16 ) int3
 	int3( const int a, const int b, const int c ) : x( a ), y( b ), z( c ) {}
 	int3( const int a ) : x( a ), y( a ), z( a ) {}
 	int3( const int4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
-	int3( const float3 & a );
+	int3( const float3& a );
 	union { struct { int x, y, z; int dummy; }; int cell[4]; };
 	int& operator [] ( const int n ) { return cell[n]; }
 };
@@ -87,7 +87,7 @@ struct ALIGN( 16 ) uint3
 	uint3( const uint a, const uint b, const uint c ) : x( a ), y( b ), z( c ) {}
 	uint3( const uint a ) : x( a ), y( a ), z( a ) {}
 	uint3( const uint4 a ) : x( a.x ), y( a.y ), z( a.z ) {}
-	uint3( const float3 & a );
+	uint3( const float3& a );
 	union { struct { uint x, y, z; uint dummy; }; uint cell[4]; };
 	uint& operator [] ( const int n ) { return cell[n]; }
 };
@@ -669,9 +669,10 @@ public:
 	CHECK_RESULT mat4 Transposed() const
 	{
 		mat4 M;
-		M[0] = cell[0], M[1] = cell[4], M[2] = cell[8];
-		M[4] = cell[1], M[5] = cell[5], M[6] = cell[9];
-		M[8] = cell[2], M[9] = cell[6], M[10] = cell[10];
+		M[0] = cell[0], M[1] = cell[4], M[2] = cell[8], M[3] = cell[12];
+		M[4] = cell[1], M[5] = cell[5], M[6] = cell[9], M[7] = cell[13];
+		M[8] = cell[2], M[9] = cell[6], M[10] = cell[10], M[11] = cell[14];
+		M[12] = cell[3], M[13] = cell[7], M[14] = cell[11], M[15] = cell[15];
 		return M;
 	}
 	CHECK_RESULT mat4 FastInvertedTransformNoScale() const
