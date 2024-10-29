@@ -23,9 +23,6 @@
     <ClCompile Include="template\scene.cpp">
       <Filter>template</Filter>
     </ClCompile>
-    <ClCompile Include="template\bvh.cpp">
-      <Filter>template</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h" />
@@ -54,9 +51,6 @@
       <Filter>kernels</Filter>
     </ClInclude>
     <ClInclude Include="template\scene.h">
-      <Filter>template</Filter>
-    </ClInclude>
-    <ClInclude Include="template\bvh.h">
       <Filter>template</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,5 +1,11 @@
 #include "precomp.h"
 
+// access tiny_bvh
+#define TINYBVH_IMPLEMENTATION
+#include "tiny_bvh.h"
+using namespace tinybvh;
+#include "scene.h"
+
 // access syoyo's tiny_obj and tiny_gltf
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -779,7 +785,7 @@ void Mesh::UpdateBVH()
 	if (!bvh)
 	{
 		bvh = new BVH();
-		bvh->Build( this );
+		bvh->Build( vertices.data(), (uint)vertices.size() / 3 );
 	}
 	else
 	{
@@ -2362,14 +2368,18 @@ void Scene::UpdateSceneGraph( const float deltaTime )
 		node->Update( T /* start with an identity matrix */ );
 	}
 	// construct TLAS
-	static Mesh m( 512 /* this will be our max BLAS count for now */ );
-	const uint blasCount = (uint)meshPool.size();
-	for (uint i = 0; i < blasCount; i++)
+	if (tlas)
 	{
-		m.vertices[i * 3 + 0] = meshPool[i]->worldBounds.bmin3;
-		m.vertices[i * 3 + 1] = m.vertices[i * 3 + 2] = meshPool[i]->worldBounds.bmax3;
+		static Mesh m( 512 /* this will be our max BLAS count for now */ );
+		const uint blasCount = (uint)meshPool.size();
+		for (uint i = 0; i < blasCount; i++)
+		{
+			m.vertices[i * 3 + 0] = meshPool[i]->worldBounds.bmin3;
+			m.vertices[i * 3 + 1] = m.vertices[i * 3 + 2] = meshPool[i]->worldBounds.bmax3;
+		}
+		// if (!tlas) tlas = new BVH(); - TODO
+		// tlas->Build( &m, blasCount ); - TODO
 	}
-	tlas.Build( &m, blasCount );
 }
 
 #ifdef ENABLE_OPENCL_BVH
@@ -2390,7 +2400,7 @@ void Scene::InitializeGPUData()
 		nodeCount += meshPool[i]->bvh->newNodePtr,
 		primCount += (int)meshPool[i]->vertices.size() / 3,
 		idxCount += meshPool[i]->bvh->idxCount;
-	nodeCount += tlas.newNodePtr;
+	if (tlas) nodeCount += tlas->newNodePtr;
 	primCount += (int)meshPool.size();
 	idxCount += (int)meshPool.size();
 	// count textures and texture pixels
@@ -2426,8 +2436,11 @@ void Scene::InitializeGPUData()
 	uchar* fatPtr = (uchar*)fatTriData->GetHostPtr();
 	uchar* idxPtr = (uchar*)triangleIdxData->GetHostPtr();
 	uint4* offset = (uint4*)offsetData->GetHostPtr();
-	memcpy( bvhPtr, tlas.bvhNode, tlas.newNodePtr * sizeof( BVH::BVHNode ) );
-	memcpy( idxPtr, tlas.triIdx, meshPool.size() * sizeof( uint ) );
+	if (tlas)
+	{
+		memcpy( bvhPtr, tlas->bvhNode, tlas->newNodePtr * sizeof( BVH::BVHNode ) );
+		memcpy( idxPtr, tlas->triIdx, meshPool.size() * sizeof( uint ) );
+	}
 	for (int s = sky->width * sky->height, i = 0; i < s; i++)
 		((float4*)skyData->GetHostPtr())[i] = float4( sky->pixels[i], 0 );
 	bvhPtr += 2 * (int)meshPool.size() * sizeof( BVH::BVHNode );
@@ -2506,16 +2519,19 @@ void Scene::UpdateGPUData()
 	// tlas and matrices will be synced each frame
 	uchar* idxPtr = (uchar*)triangleIdxData->GetHostPtr();
 	uchar* bvhPtr = (uchar*)bvhNodeData->GetHostPtr();
-	memcpy( bvhPtr, tlas.bvhNode, tlas.newNodePtr * 32 );
-	memcpy( idxPtr, tlas.triIdx, meshPool.size() * 4 );
+	if (tlas)
+	{
+		memcpy( bvhPtr, tlas->bvhNode, tlas->newNodePtr * 32 );
+		memcpy( idxPtr, tlas->triIdx, meshPool.size() * 4 );
+		bvhNodeData->CopyToDevice( 0, tlas->newNodePtr * 32 /* just the tlas */ );
+		triangleIdxData->CopyToDevice( 0, (int)meshPool.size() * 4 /* just the tlas */ );
+	}
 	for (int s = (int)meshPool.size(), i = 0; i < s; i++)
 	{
 		memcpy( transformData->GetHostPtr() + i * 32, &meshPool[i]->transform, 64 );
 		memcpy( transformData->GetHostPtr() + i * 32 + 16, &meshPool[i]->invTransform, 64 );
 	}
 	// send the data to the gpu
-	bvhNodeData->CopyToDevice( 0, tlas.newNodePtr * 32 /* just the tlas */ );
-	triangleIdxData->CopyToDevice( 0, (int)meshPool.size() * 4 /* just the tlas */ );
 	transformData->CopyToDevice();
 }
 
@@ -2527,39 +2543,49 @@ void Scene::UpdateGPUData()
 //  +-----------------------------------------------------------------------------+
 int Scene::Intersect( Ray& ray )
 {
-	// use a local stack instead of a recursive function
-	BVH::BVHNode* node = &tlas.bvhNode[0], * stack[128];
-	uint stackPtr = 0, steps = 0;
-	// traversl loop; terminates when the stack is empty
-	while (1)
+	uint steps = 0;
+	if (!tlas)
 	{
-		steps++;
-		if (node->isLeaf())
+		// intersect the blas of each mesh
+		uint meshes = (uint)meshPool.size();
+		for( uint i = 0; i < meshes; i++ ) steps += meshPool[i]->Intersect( ray );
+	}
+	else
+	{
+		// use a local stack instead of a recursive function
+		BVH::BVHNode* node = &tlas->bvhNode[0], * stack[128];
+		uint stackPtr = 0, steps = 0;
+		// traversl loop; terminates when the stack is empty
+		while (1)
 		{
-			// current node is a leaf: intersect BLAS
-			int blasCount = node->triCount;
-			for (int i = 0; i < blasCount; i++)
+			steps++;
+			if (node->isLeaf())
 			{
-				const uint meshIdx = tlas.triIdx[node->leftFirst + i];
-				steps += meshPool[meshIdx]->Intersect( ray );
+				// current node is a leaf: intersect BLAS
+				int blasCount = node->triCount;
+				for (int i = 0; i < blasCount; i++)
+				{
+					const uint meshIdx = tlas->triIdx[node->leftFirst + i];
+					steps += meshPool[meshIdx]->Intersect( ray );
+				}
+				// pop a node from the stack; terminate if none left
+				if (stackPtr == 0) break; else node = stack[--stackPtr];
+				continue;
 			}
-			// pop a node from the stack; terminate if none left
-			if (stackPtr == 0) break; else node = stack[--stackPtr];
-			continue;
-		}
-		// current node is an interior node: visit child nodes, ordered
-		BVH::BVHNode* child1 = &tlas.bvhNode[node->leftFirst];
-		BVH::BVHNode* child2 = &tlas.bvhNode[node->leftFirst + 1];
-		float dist1 = child1->Intersect( ray ), dist2 = child2->Intersect( ray );
-		if (dist1 > dist2) { swap( dist1, dist2 ); swap( child1, child2 ); }
-		if (dist1 == 1e30f)
-		{
-			if (stackPtr == 0) break; else node = stack[--stackPtr];
-		}
-		else
-		{
-			node = child1;
-			if (dist2 != 1e30f) stack[stackPtr++] = child2;
+			// current node is an interior node: visit child nodes, ordered
+			BVH::BVHNode* child1 = &tlas->bvhNode[node->leftFirst];
+			BVH::BVHNode* child2 = &tlas->bvhNode[node->leftFirst + 1];
+			float dist1 = child1->Intersect( ray ), dist2 = child2->Intersect( ray );
+			if (dist1 > dist2) { swap( dist1, dist2 ); swap( child1, child2 ); }
+			if (dist1 == 1e30f)
+			{
+				if (stackPtr == 0) break; else node = stack[--stackPtr];
+			}
+			else
+			{
+				node = child1;
+				if (dist2 != 1e30f) stack[stackPtr++] = child2;
+			}
 		}
 	}
 	return steps;

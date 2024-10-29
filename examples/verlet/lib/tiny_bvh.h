@@ -1,79 +1,150 @@
-#include "precomp.h"
+/*
+The MIT License (MIT)
 
-// 'declaration of x hides previous local declaration'
-#pragma warning( disable: 4456) 
+Copyright (c) 2024, Jacco Bikker / Breda University of Applied Sciences.
 
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::SAHCost                                                               |
-//  |  Calculates the SAH cost for the BVH as a whole.                      LH2'24|
-//  +-----------------------------------------------------------------------------+
-float BVH::SAHCost( const uint nodeIdx )
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+//
+// Use this in *one* .c or .cpp
+//   #define TINYBVH_IMPLEMENTATION
+//   #include "tiny_bvh.h"
+//
+
+#ifndef TINY_BVH_H_
+#define TINY_BVH_H_
+
+// binned BVH building: bin count
+#define BVHBINS 8
+
+// aligned memory allocation
+#ifdef _MSC_VER
+#define ALIGNED_MALLOC( x ) ( ( x ) == 0 ? 0 : _aligned_malloc( ( x ), 64 ) )
+#define ALIGNED_FREE( x ) _aligned_free( x )
+#else
+#define ALIGNED_MALLOC( x ) ( ( x ) == 0 ? 0 : aligned_alloc( 64, ( x ) ) )
+#define ALIGNED_FREE( x ) free( x )
+#endif
+
+namespace tinybvh {
+
+struct Intersection
 {
-	BVHNode& n = bvhNode[nodeIdx];
-	if (n.isLeaf()) return 2.0f * n.SurfaceArea() * n.triCount;
-	float cost = 3.0f * n.SurfaceArea() + SAHCost( n.leftFirst ) + SAHCost( n.leftFirst + 1 );
-	return nodeIdx == 0 ? (cost / n.SurfaceArea()) : cost;
-}
+	float t, u, v;	// distance along ray & barycentric coordinates of the intersection
+	uint prim;		// primitive index
+};
 
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::NodeCount                                                             |
-//  |  Counts the number of (connected) nodes in the BVH.                   LH2'24|
-//  +-----------------------------------------------------------------------------+
-int BVH::NodeCount( const uint nodeIdx )
+struct Ray
 {
-	BVHNode& n = bvhNode[nodeIdx];
-	uint retVal = 1;
-	if (!n.isLeaf()) retVal += NodeCount( n.leftFirst ) + NodeCount( n.leftFirst + 1 );
-	return retVal;
-}
-
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::Refit                                                                 |
-//  |  Refit the BVH to fit changed geometry.                               LH2'24|
-//  +-----------------------------------------------------------------------------+
-void BVH::Refit()
-{
-	if (!canRefit) FatalError( "can't refit an SBVH." );
-	for (int i = newNodePtr - 1; i >= 0; i--)
+	Ray() = default;
+	Ray( float3 origin, float3 direction, float t = 1e30f )
 	{
-		BVHNode& node = bvhNode[i];
-		if (node.isLeaf()) // leaf: adjust to current triangle vertex positions
-		{
-			float4 aabbMin( 1e30f ), aabbMax( -1e30f );
-			for (uint first = node.leftFirst, j = 0; j < node.triCount; j++)
-			{
-				const uint vertIdx = triIdx[first + j] * 3;
-				aabbMin = fminf( aabbMin, tris[vertIdx] ), aabbMax = fmaxf( aabbMax, tris[vertIdx] );
-				aabbMin = fminf( aabbMin, tris[vertIdx + 1] ), aabbMax = fmaxf( aabbMax, tris[vertIdx + 1] );
-				aabbMin = fminf( aabbMin, tris[vertIdx + 2] ), aabbMax = fmaxf( aabbMax, tris[vertIdx + 2] );
-			}
-			node.aabbMin = aabbMin, node.aabbMax = aabbMax;
-		}
-		else // interior node: adjust to child bounds
-		{
-			BVHNode& left = bvhNode[node.leftFirst], & right = bvhNode[node.leftFirst + 1];
-			node.aabbMin = fminf( left.aabbMin, right.aabbMin );
-			node.aabbMax = fmaxf( left.aabbMax, right.aabbMax );
-		}
+		O = origin, D = direction, rD = safercp( D );
+		hit.t = t;
 	}
-}
+	float3 O, D, rD;
+	Intersection hit; // total ray size: 64 bytes
+};
 
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::Build                                                                 |
-//  |  Efficient single-function binned SAH BVH construction.               LH2'24|
-//  +-----------------------------------------------------------------------------+
-void BVH::Build( Mesh* mesh, uint cap )
+class BVH
+{
+public:
+	struct BVHNode
+	{
+		float3 aabbMin; uint leftFirst;
+		float3 aabbMax; uint triCount;
+		bool isLeaf() const { return triCount > 0; /* empty BVH leaves do not exist */ }
+		float Intersect( const Ray& ray ) const { return BVH::IntersectAABB( ray, aabbMin, aabbMax ); }
+		float SurfaceArea() const { return BVH::SA( aabbMin, aabbMax ); }
+		float CalculateNodeCost() const { return SurfaceArea() * triCount; }
+	};
+	struct Fragment
+	{
+		float3 bmin;
+		uint primIdx;
+		float3 bmax;
+		uint clipped = 0;
+		bool validBox() { return bmin.x < 1e30f; }
+	};
+	BVH() = default;
+	~BVH()
+	{
+		ALIGNED_FREE( bvhNode );
+		delete triIdx;
+		delete fragment;
+		bvhNode = 0, triIdx = 0, fragment = 0;
+	}
+	float SAHCost( const uint nodeIdx = 0 ) const
+	{
+		const BVHNode& n = bvhNode[nodeIdx];
+		if (n.isLeaf()) return 2.0f * n.SurfaceArea() * n.triCount;
+		float cost = 3.0f * n.SurfaceArea() + SAHCost( n.leftFirst ) + SAHCost( n.leftFirst + 1 );
+		return nodeIdx == 0 ? (cost / n.SurfaceArea()) : cost;
+	}
+	int NodeCount( const uint nodeIdx = 0 ) const
+	{
+		const BVHNode& n = bvhNode[nodeIdx];
+		uint retVal = 1;
+		if (!n.isLeaf()) retVal += NodeCount( n.leftFirst ) + NodeCount( n.leftFirst + 1 );
+		return retVal;
+	}
+	void Build( const float4* vertices, const uint primCount );
+	void Refit();
+	int Intersect( Ray& ray ) const;
+private:
+	void IntersectTri( Ray& ray, const uint triIdx ) const;
+	static float IntersectAABB( const Ray& ray, const float3& aabbMin, const float3& aabbMax );
+	static float SA( const float3& aabbMin, const float3& aabbMax )
+	{
+		float3 e = aabbMax - aabbMin; // extent of the node
+		return e.x * e.y + e.y * e.z + e.z * e.x;
+	}
+public:
+	uint* triIdx = 0;
+	Fragment* fragment = 0;
+	uint idxCount = 0, triCount = 0, newNodePtr = 0;
+	BVHNode* bvhNode = 0, * tmp = 0;
+	float4* tris = 0;
+};
+
+#ifdef TINYBVH_IMPLEMENTATION
+
+#include <assert.h>
+
+void BVH::Build( const float4* vertices, const uint primCount )
 {
 	// reset node pool
-	newNodePtr = 2, triCount = min( cap, (uint)mesh->vertices.size() / 3 );
+	newNodePtr = 2, triCount = primCount;
 	if (!bvhNode)
 	{
-		bvhNode = (BVHNode*)MALLOC64( triCount * 2 * sizeof( BVHNode ) );
-		memset( &bvhNode[1], 0, 32 ); // avoid crash in refit.
-		triIdx = new uint[triCount], tris = mesh->vertices.data();
-		fragment = new Fragment[triCount], idxCount = triCount; // no splits in regular BVH
+		bvhNode = (BVHNode*)ALIGNED_MALLOC( triCount * 2 * sizeof( BVHNode ) );
+		memset( &bvhNode[1], 0, 32 ); // node 1 remains unused, for cache line alignment.
+		triIdx = new uint[triCount];
+		tris = (float4*)vertices;
+		fragment = new Fragment[triCount];
+		idxCount = triCount;
 	}
-	else assert( tris == mesh->vertices.data() ); // don't change polygon count between builds
+	else
+	{
+		assert( triCount == primCount ); // don't change triangle count between builds.
+	}
 	// assign all triangles to the root node
 	BVHNode& root = bvhNode[0];
 	root.leftFirst = 0, root.triCount = triCount, root.aabbMin = float3( 1e30f ), root.aabbMax = float3( -1e30f );
@@ -163,15 +234,34 @@ void BVH::Build( Mesh* mesh, uint cap )
 		// fetch subdivision task from stack
 		if (taskCount == 0) break; else nodeIdx = task[--taskCount];
 	}
-	// all done.
-	canRefit = true;
 }
 
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::Intersect                                                             |
-//  |  Intersect a BVH with a ray.                                          LH2'24|
-//  +-----------------------------------------------------------------------------+
-int BVH::Intersect( Ray& ray )
+void BVH::Refit()
+{
+	for (int i = newNodePtr - 1; i >= 0; i--)
+	{
+		BVHNode& node = bvhNode[i];
+		if (node.isLeaf()) // leaf: adjust to current triangle vertex positions
+		{
+			float4 aabbMin( 1e30f ), aabbMax( -1e30f );
+			for (uint first = node.leftFirst, j = 0; j < node.triCount; j++)
+			{
+				const uint vertIdx = triIdx[first + j] * 3;
+				aabbMin = fminf( aabbMin, tris[vertIdx] ), aabbMax = fmaxf( aabbMax, tris[vertIdx] );
+				aabbMin = fminf( aabbMin, tris[vertIdx + 1] ), aabbMax = fmaxf( aabbMax, tris[vertIdx + 1] );
+				aabbMin = fminf( aabbMin, tris[vertIdx + 2] ), aabbMax = fmaxf( aabbMax, tris[vertIdx + 2] );
+			}
+			node.aabbMin = aabbMin, node.aabbMax = aabbMax;
+			continue;
+		}
+		// interior node: adjust to child bounds
+		const BVHNode& left = bvhNode[node.leftFirst], & right = bvhNode[node.leftFirst + 1];
+		node.aabbMin = fminf( left.aabbMin, right.aabbMin );
+		node.aabbMax = fmaxf( left.aabbMax, right.aabbMax );
+	}
+}
+
+int BVH::Intersect( Ray& ray ) const
 {
 	// traverse bvh
 	BVHNode* node = &bvhNode[0], * stack[64];
@@ -201,11 +291,7 @@ int BVH::Intersect( Ray& ray )
 	return steps;
 }
 
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::BVHNode::Intersect                                                    |
-//  |  Calculate intersection between a ray and the node bounds.            LH2'24|
-//  +-----------------------------------------------------------------------------+
-void BVH::IntersectTri( Ray& ray, const uint idx )
+void BVH::IntersectTri( Ray& ray, const uint idx ) const
 {
 	// Moeller-Trumbore ray/triangle intersection algorithm
 	const uint vertIdx = idx * 3;
@@ -225,10 +311,6 @@ void BVH::IntersectTri( Ray& ray, const uint idx )
 	if (t > 0 && t < ray.hit.t) ray.hit.t = t, ray.hit.u = u, ray.hit.v = v, ray.hit.prim = idx;
 }
 
-//  +-----------------------------------------------------------------------------+
-//  |  BVH::IntersectAABB                                                         |
-//  |  Calculate intersection between a ray and an AABB.                    LH2'24|
-//  +-----------------------------------------------------------------------------+
 float BVH::IntersectAABB( const Ray& ray, const float3& aabbMin, const float3& aabbMax )
 {
 	// "slab test" ray/AABB intersection
@@ -240,3 +322,9 @@ float BVH::IntersectAABB( const Ray& ray, const float3& aabbMin, const float3& a
 	tmin = max( tmin, min( tz1, tz2 ) ), tmax = min( tmax, max( tz1, tz2 ) );
 	if (tmax >= tmin && tmin < ray.hit.t && tmax >= 0) return tmin; else return 1e30f;
 }
+
+#endif
+
+}
+
+#endif

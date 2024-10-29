@@ -147,7 +147,7 @@ public:
 	void SetPose( const Skin* skin );
 	void UpdateBVH();
 	void UpdateWorldBounds();
-	int Intersect( Ray& ray );
+	int Intersect( tinybvh::Ray& ray );
 	// data members
 	string name = "unnamed";			// name for the mesh						
 	int ID = -1;						// unique ID for the mesh: position in mesh array
@@ -564,7 +564,7 @@ public:
 	static inline vector<SpotLight*> spotLights;				// scene spot lights
 	static inline vector<DirectionalLight*> directionalLights;	// scene directional lights
 	static inline SkyDome* sky;									// HDR skydome
-	static inline BVH tlas;										// top-level acceleration structure
+	static inline BVH* tlas = 0;								// top-level acceleration structure - TODO
 #ifdef ENABLE_OPENCL_BVH
 	// OpenCL buffers for transferring data from CPU to GPU
 	static inline Buffer* bvhNodeData;							// tlas and blas node data

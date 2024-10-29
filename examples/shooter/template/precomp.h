@@ -392,10 +392,6 @@ void MarkAsDirty() { __dirty++; } \
 void MarkAsNotDirty() { Changed(); } \
 private: uint64_t __crc64 = CLEARCRC64; uint __dirty = 0; public:
 
-// scene graph management
-#include "bvh.h"
-#include "scene.h"
-
 // application base class
 class TheApp
 {
