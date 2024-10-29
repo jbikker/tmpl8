@@ -785,7 +785,7 @@ void Mesh::UpdateBVH()
 	if (!bvh)
 	{
 		bvh = new BVH();
-		bvh->Build( vertices.data(), (uint)vertices.size() / 3 );
+		bvh->Build( (tinybvh::bvhvec4*)vertices.data(), (uint)vertices.size() / 3 );
 	}
 	else
 	{
@@ -801,9 +801,12 @@ int Mesh::Intersect( Ray& ray )
 {
 	// backup ray and transform original
 	Ray backupRay = ray;
-	ray.O = TransformPosition( ray.O, invTransform );
-	ray.D = TransformVector( ray.D, invTransform );
-	ray.rD = float3( safercp( ray.D.x ), safercp( ray.D.y ), safercp( ray.D.z ) );
+	float3* O = (float3*)&ray.O;
+	float3* D = (float3*)&ray.D;
+	float3* rD = (float3*)&ray.rD;
+	*O = TransformPosition( *O, invTransform );
+	*D = TransformVector( *D, invTransform );
+	*rD = float3( safercp( D->x ), safercp( D->y ), safercp( D->z ) );
 	// trace ray through BVH
 	uint steps = bvh->Intersect( ray );
 	// restore ray origin and direction
@@ -819,7 +822,8 @@ int Mesh::Intersect( Ray& ray )
 void Mesh::UpdateWorldBounds()
 {
 	worldBounds.Reset();
-	float3 bmin = bvh->bvhNode[0].aabbMin, bmax = bvh->bvhNode[0].aabbMax;
+	float3 bmin = *(float3*)&bvh->bvhNode[0].aabbMin;
+	float3 bmax = *(float3*)&bvh->bvhNode[0].aabbMax;
 	for (int i = 0; i < 8; i++)
 	{
 		float3 corner( i & 1 ? bmax.x : bmin.x, i & 2 ? bmax.y : bmin.y, i & 4 ? bmax.z : bmin.z );
@@ -2420,7 +2424,7 @@ void Scene::InitializeGPUData()
 		}
 	}
 	// allocate buffers for GPU data
-	bvhNodeData = new Buffer( nodeCount * sizeof( BVH::BVHNode ) );
+	bvhNodeData = new Buffer( nodeCount * sizeof( tinybvh::BVH::BVHNode ) );
 	triangleData = new Buffer( primCount * 3 * sizeof( float4 ) );
 	triangleIdxData = new Buffer( idxCount * sizeof( uint ) );
 	offsetData = new Buffer( (int)meshPool.size() * 2 * sizeof( uint4 ) );
@@ -2438,12 +2442,12 @@ void Scene::InitializeGPUData()
 	uint4* offset = (uint4*)offsetData->GetHostPtr();
 	if (tlas)
 	{
-		memcpy( bvhPtr, tlas->bvhNode, tlas->newNodePtr * sizeof( BVH::BVHNode ) );
+		memcpy( bvhPtr, tlas->bvhNode, tlas->newNodePtr * sizeof( tinybvh::BVH::BVHNode ) );
 		memcpy( idxPtr, tlas->triIdx, meshPool.size() * sizeof( uint ) );
 	}
 	for (int s = sky->width * sky->height, i = 0; i < s; i++)
 		((float4*)skyData->GetHostPtr())[i] = float4( sky->pixels[i], 0 );
-	bvhPtr += 2 * (int)meshPool.size() * sizeof( BVH::BVHNode );
+	bvhPtr += 2 * (int)meshPool.size() * sizeof( tinybvh::BVH::BVHNode );
 	idxPtr += (int)meshPool.size() * sizeof( uint );
 	for (int s = (int)meshPool.size(), i = 0; i < s; i++)
 	{
@@ -2553,7 +2557,7 @@ int Scene::Intersect( Ray& ray )
 	else
 	{
 		// use a local stack instead of a recursive function
-		BVH::BVHNode* node = &tlas->bvhNode[0], * stack[128];
+		tinybvh::BVH::BVHNode* node = &tlas->bvhNode[0], * stack[128];
 		uint stackPtr = 0, steps = 0;
 		// traversl loop; terminates when the stack is empty
 		while (1)
@@ -2573,8 +2577,8 @@ int Scene::Intersect( Ray& ray )
 				continue;
 			}
 			// current node is an interior node: visit child nodes, ordered
-			BVH::BVHNode* child1 = &tlas->bvhNode[node->leftFirst];
-			BVH::BVHNode* child2 = &tlas->bvhNode[node->leftFirst + 1];
+			tinybvh::BVH::BVHNode* child1 = &tlas->bvhNode[node->leftFirst];
+			tinybvh::BVH::BVHNode* child2 = &tlas->bvhNode[node->leftFirst + 1];
 			float dist1 = child1->Intersect( ray ), dist2 = child2->Intersect( ray );
 			if (dist1 > dist2) { swap( dist1, dist2 ); swap( child1, child2 ); }
 			if (dist1 == 1e30f)

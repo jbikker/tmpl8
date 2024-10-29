@@ -73,7 +73,7 @@ void Game::Tick( float /* deltaTime */ )
 	Mesh* mesh = scene.meshPool[0];
 	for( int y = 0; y < 256; y++ ) for( int x = 0; x < 256; x++ )
 	{
-		tinybvh::Ray r( float3( x - 128.0f, 128.0f - y, -500.0f ) * 0.001f, float3( 0, 0, 1 ) );
+		tinybvh::Ray r( tinybvh::bvhvec3( x - 128.0f, 128.0f - y, -500.0f ) * 0.001f, tinybvh::bvhvec3( 0, 0, 1 ) );
 		mesh->bvh->Intersect( r );
 		screen->Plot( x + 800, y + 100, r.hit.t < 1e30f ? 0xffffff : 0 );
 	}
