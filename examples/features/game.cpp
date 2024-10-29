@@ -4,6 +4,8 @@
 
 #include "precomp.h"
 #include "game.h"
+#include "tiny_bvh.h"
+#include "scene.h"
 
 static Scene scene;
 static int legocar;
@@ -18,8 +20,8 @@ void Game::Init()
 	legocar = scene.AddMesh( "assets/legocar.obj" );
 	Mesh* mesh = scene.meshPool[0];
 	mesh->UpdateBVH();
-	BVH* bvh = mesh->bvh;
-	bvhData = new Buffer( bvh->newNodePtr * sizeof( BVH::BVHNode ), bvh->bvhNode );
+	tinybvh::BVH* bvh = mesh->bvh;
+	bvhData = new Buffer( bvh->newNodePtr * sizeof( tinybvh::BVH::BVHNode ), bvh->bvhNode );
 	triData = new Buffer( bvh->triCount * sizeof( float4 ) * 3, bvh->tris );
 	idxData = new Buffer( bvh->triCount * sizeof( uint ), bvh->triIdx );
 	bvhData->CopyToDevice();
@@ -71,7 +73,7 @@ void Game::Tick( float /* deltaTime */ )
 	Mesh* mesh = scene.meshPool[0];
 	for( int y = 0; y < 256; y++ ) for( int x = 0; x < 256; x++ )
 	{
-		Ray r( float3( x - 128.0f, 128.0f - y, -500.0f ) * 0.001f, float3( 0, 0, 1 ) );
+		tinybvh::Ray r( float3( x - 128.0f, 128.0f - y, -500.0f ) * 0.001f, float3( 0, 0, 1 ) );
 		mesh->bvh->Intersect( r );
 		screen->Plot( x + 800, y + 100, r.hit.t < 1e30f ? 0xffffff : 0 );
 	}

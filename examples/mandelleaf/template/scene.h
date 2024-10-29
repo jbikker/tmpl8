@@ -165,7 +165,7 @@ public:
 	mat4 transform, invTransform;		// copy of combined transform of parent node, for TLAS construction
 	TRACKCHANGES;						// add Changed(), MarkAsDirty() methods, see system.h
 	aabb worldBounds;					// mesh bounds transformed by the transform of the parent node, for TLAS builds
-	BVH* bvh = 0;						// bounding volume hierarchy for ray tracing; excluded from change tracking.
+	tinybvh::BVH* bvh = 0;				// bounding volume hierarchy for ray tracing; excluded from change tracking.
 };
 
 //  +-----------------------------------------------------------------------------+
@@ -550,7 +550,7 @@ public:
 	static int AddDirectionalLight( const float3 direction, const float3 radiance );
 	// scene graph / TLAS operations
 	static void UpdateSceneGraph( const float deltaTime );
-	static int Intersect( Ray& ray );
+	static int Intersect( tinybvh::Ray& ray );
 	// data members
 	static inline vector<int> rootNodes;						// root node indices of loaded (or instanced) objects
 	static inline vector<Node*> nodePool;						// all scene nodes
@@ -564,7 +564,7 @@ public:
 	static inline vector<SpotLight*> spotLights;				// scene spot lights
 	static inline vector<DirectionalLight*> directionalLights;	// scene directional lights
 	static inline SkyDome* sky;									// HDR skydome
-	static inline BVH* tlas = 0;								// top-level acceleration structure - TODO
+	static inline tinybvh::BVH* tlas = 0;						// top-level acceleration structure - TODO
 #ifdef ENABLE_OPENCL_BVH
 	// OpenCL buffers for transferring data from CPU to GPU
 	static inline Buffer* bvhNodeData;							// tlas and blas node data
