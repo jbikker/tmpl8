@@ -4,7 +4,7 @@
 
 // A precompiled header speeds up compilation by precompiling stable code.
 // The content in this file is source code that you will likely not change
-// for your project. More info: 
+// for your project. More info:
 // www.codeproject.com/Articles/1188975/How-to-Optimize-Compilation-Times-with-Precompil
 
 // common C++ headers
@@ -29,7 +29,7 @@ typedef unsigned int uint;
 typedef unsigned short ushort;
 typedef unsigned short half;
 
-// "leak" common namespaces to all compilation units. This is not standard // C++ practice 
+// "leak" common namespaces to all compilation units. This is not standard // C++ practice
 // but a deliberate simplification for template projects. Feel free to remove this if it
 // offends you.
 using namespace std;

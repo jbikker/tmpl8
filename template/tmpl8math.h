@@ -118,6 +118,7 @@ struct float3
 	float halfArea() { return x < -1e30f ? 0 : (x * y + y * z + z * x); } // for SAH calculations
 	union { struct { float x, y, z; }; float cell[3]; };
 	float& operator [] ( const int n ) { return cell[n]; }
+	const float& operator [] ( const int n ) const { return cell[n]; }
 };
 struct ALIGN( 4 ) uchar4
 {
@@ -909,17 +910,18 @@ public:
 		else
 		{
 			float angle = acosf( cosTheta );
-			float s1 = sinf( 1 - t ), s2 = sinf( t * angle ), s3 = sinf( angle );
-			r.w = (s1 * a.w + s2 * r.w) / s3;
-			r.x = (s1 * a.x + s2 * r.x) / s3;
-			r.y = (s1 * a.y + s2 * r.y) / s3;
-			r.z = (s1 * a.z + s2 * r.z) / s3;
+			// float s1 = sinf( 1 - t ), s2 = sinf( t * angle ), s3 = sinf( angle );
+			float s1 = sinf( (1 - t) * angle ), s2 = sinf( t * angle ), rs3 = 1.0f / sinf( angle );
+			r.w = (s1 * a.w + s2 * r.w) * rs3;
+			r.x = (s1 * a.x + s2 * r.x) * rs3;
+			r.y = (s1 * a.y + s2 * r.y) * rs3;
+			r.z = (s1 * a.z + s2 * r.z) * rs3;
 		}
 		return r;
 	}
 	quat operator + ( const quat& q ) const { return quat( w + q.w, x + q.x, y + q.y, z + q.z ); }
 	quat operator - ( const quat& q ) const { return quat( w - q.w, x - q.x, y - q.y, z - q.z ); }
-	quat operator / ( float s ) const { return quat( w / s, x / s, y / s, z / s ); }
+	quat operator / ( float s ) const { const float r = 1.0f / s; return quat( w * r, x * r, y * r, z * r ); }
 	quat operator * ( float s ) const { return scale( s ); }
 	quat scale( float s ) const { return quat( w * s, x * s, y * s, z * s ); }
 	float w = 1, x = 0, y = 0, z = 0;
