@@ -26,6 +26,7 @@ extern "C"
 #endif
 
 GLFWwindow* window = 0;
+GLFWwindow* GetGLFWWindow() { return window; }
 static bool hasFocus = true, running = true;
 static GLTexture* renderTarget = 0;
 static int scrwidth = 0, scrheight = 0;
@@ -83,7 +84,7 @@ void ErrorCallback( int, const char* description )
 }
 
 // Application entry point
-void main()
+int main()
 {
 	// open a window
 	if (!glfwInit()) FatalError( "glfwInit failed." );
@@ -353,6 +354,7 @@ void main()
 	Kernel::KillCL();
 	glfwDestroyWindow( window );
 	glfwTerminate();
+	return 0;
 }
 
 // Jobmanager implementation
@@ -603,8 +605,6 @@ void TextFileWrite( const string& text, const char* _File )
 extern "C" {
 #endif
 
-
-
 	int GLAD_GL_VERSION_1_0 = 0;
 	int GLAD_GL_VERSION_1_1 = 0;
 	int GLAD_GL_VERSION_1_2 = 0;
@@ -617,8 +617,6 @@ extern "C" {
 	int GLAD_GL_VERSION_3_1 = 0;
 	int GLAD_GL_VERSION_3_2 = 0;
 	int GLAD_GL_VERSION_3_3 = 0;
-
-
 
 	PFNGLACTIVETEXTUREPROC glad_glActiveTexture = NULL;
 	PFNGLATTACHSHADERPROC glad_glAttachShader = NULL;
@@ -964,7 +962,6 @@ extern "C" {
 	PFNGLVERTEXATTRIBPOINTERPROC glad_glVertexAttribPointer = NULL;
 	PFNGLVIEWPORTPROC glad_glViewport = NULL;
 	PFNGLWAITSYNCPROC glad_glWaitSync = NULL;
-
 
 	static void glad_gl_load_GL_VERSION_1_0( GLADuserptrloadfunc load, void* userptr ) {
 		if (!GLAD_GL_VERSION_1_0) return;
@@ -1350,8 +1347,6 @@ extern "C" {
 		glad_glVertexAttribP4uiv = (PFNGLVERTEXATTRIBP4UIVPROC)load( userptr, "glVertexAttribP4uiv" );
 	}
 
-
-
 	static void glad_gl_free_extensions( char** exts_i ) {
 		if (exts_i != NULL) {
 			unsigned int index;
@@ -1515,19 +1510,12 @@ extern "C" {
 
 		if (!glad_gl_find_extensions_gl()) return 0;
 
-
-
 		return version;
 	}
-
 
 	int gladLoadGL( GLADloadfunc load ) {
 		return gladLoadGLUserPtr( glad_gl_get_proc_from_userptr, GLAD_GNUC_EXTENSION( void* ) load );
 	}
-
-
-
-
 
 #ifdef GLAD_GL
 
@@ -1542,7 +1530,6 @@ extern "C" {
 #else
 #include <dlfcn.h>
 #endif
-
 
 	static void* glad_get_dlopen_handle( const char* lib_names[], int length ) {
 		void* handle = NULL;
@@ -1684,8 +1671,6 @@ extern "C" {
 
 		return version;
 	}
-
-
 
 	void gladLoaderUnloadGL( void ) {
 		if (_glad_GL_loader_handle != NULL) {

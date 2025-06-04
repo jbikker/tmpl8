@@ -14,7 +14,7 @@ using namespace tinybvh;
 #include "tiny_gltf.h"
 
 // 'declaration of x hides previous local declaration'
-#pragma warning( disable: 4456) 
+#pragma warning( disable: 4456)
 
 // IMPLEMENTATION OF THE LIGHTHOUSE 2 SCENE GRAPH
 
@@ -1010,7 +1010,7 @@ void Node::PrepareLights()
 				tri->ltriIdx = (int)Scene::triLights.size(); // TODO: can't duplicate a light due to this.
 				Scene::triLights.push_back( light );
 				hasLights = true;
-				// Note: TODO: 
+				// Note: TODO:
 				// 1. if a mesh is deleted it should scan the list of area lights
 				//    to delete those that no longer exist.
 				// 2. if a material is changed from emissive to non-emissive,
@@ -2552,7 +2552,7 @@ int Scene::Intersect( Ray& ray )
 	{
 		// intersect the blas of each mesh
 		uint meshes = (uint)meshPool.size();
-		for( uint i = 0; i < meshes; i++ ) steps += meshPool[i]->Intersect( ray );
+		for (uint i = 0; i < meshes; i++) steps += meshPool[i]->Intersect( ray );
 	}
 	else
 	{
