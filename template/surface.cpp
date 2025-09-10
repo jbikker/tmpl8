@@ -45,7 +45,11 @@ void Surface::LoadFromFile( const char* file )
 		const unsigned char p = data[i];
 		pixels[i] = p + (p << 8) + (p << 16);
 	}
-	else
+	else if (n == 4) // bitmap has alpha data
+	{
+		for (int i = 0; i < s; i++) pixels[i] = (data[i * 4 + 3] << 24) + (data[i * 4 + 0] << 16) + (data[i * 4 + 1] << 8) + data[i * 4 + 2];
+	}
+	else // no alpha
 	{
 		for (int i = 0; i < s; i++) pixels[i] = (data[i * n + 0] << 16) + (data[i * n + 1] << 8) + data[i * n + 2];
 	}
